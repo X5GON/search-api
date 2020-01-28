@@ -17,8 +17,10 @@ const querystring = require("querystring");
 /**
  * @description Assign the elasticsearch API routes.
  * @param {Object} config - The configuration object.
+ * @returns {Object} The search router.
  */
 module.exports = (config) => {
+    // set the default parameters
     const DEFAULT_LIMIT = 20;
     const MAX_LIMIT = 100;
     const DEFAULT_PAGE = 1;
@@ -26,13 +28,20 @@ module.exports = (config) => {
     // esablish connection with elasticsearch
     const es = new ElasticSearch(config.elasticsearch);
 
-    // assign the appropriate routes and their functions
+
+    /**
+     * @api {GET} /api/v1/oer_materials Search through the OER materials
+     * @apiVersion 1.0.0
+     * @apiName searchAPI
+     * @apiGroup search
+     */
     router.get("/oer_materials", [
         query("text").trim(),
         query("type").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
         query("languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.split(",") : null)),
+        query("provider_id").optional().toInt(),
         query("limit").optional().toInt(),
         query("page").optional().toInt(),
     ], async (req, res) => {
@@ -43,7 +52,8 @@ module.exports = (config) => {
                 type,
                 languages,
                 limit,
-                page
+                page,
+                provider_id
             }
         } = req;
 
@@ -82,6 +92,14 @@ module.exports = (config) => {
         const body = {
             from, // set the from parameter from the "limit", "offset", "page" params
             size, // set the size parameter from the "limit", "offset", "page" params
+            _source: {
+                excludes: [
+                    "contents.type",
+                    "contents.extension",
+                    "contents.language",
+                    "contents.value"
+                ]
+            },
             query: {
                 bool: {
                     should: [{
@@ -90,15 +108,21 @@ module.exports = (config) => {
                         nested: {
                             path: "contents",
                             query: {
-                                match: { "contents.value": text }
+                                bool: {
+                                    should: { match: { "contents.value": text } },
+                                    must: { term: { "contents.extension": "plain" } }
+                                }
                             }
                         }
                     }],
+                    ...provider_id && {
+                        must: [{ match: { provider_id } }]
+                    },
                     ...filterFlag && {
                         filter: {
                             bool: {
                                 ...types && { must: [{ term: { type: types } }] },
-                                ...languages && { should: languages.map((language) => ({ term: { language } })) }
+                                ...languages && { should: { terms: { language: languages } } }
                             }
                         }
                     }
@@ -125,6 +149,7 @@ module.exports = (config) => {
                 language: hit._source.language,
                 license: hit._source.license,
                 provider: {
+                    id: hit._source.provider_id,
                     name: hit._source.provider_name,
                     domain: hit._source.provider_url,
                 },
@@ -164,6 +189,40 @@ module.exports = (config) => {
             throw new ErrorHandler(500, "Internal server error");
         }
     });
+
+    /**
+     * @api {POST} /api/v1/oer_materials Add a new OER material to the elasticsearch index.
+     * @apiVersion 1.0.0
+     * @apiName esSearchAPI
+     * @apiGroup search
+     */
+    // TODO: define the route
+    router.post("/oer_materials", (req, res) => {
+        throw new ErrorHandler(404, "Route not found");
+    });
+
+    /**
+     * @api {PUT} /api/v1/oer_materials Update the OER material in the elasticsearch index.
+     * @apiVersion 1.0.0
+     * @apiName esSearchAPI
+     * @apiGroup search
+     */
+    // TODO: define the route
+    router.put("/oer_materials", (req, res) => {
+        throw new ErrorHandler(404, "Route not found");
+    });
+
+    /**
+     * @api {DELETE} /api/v1/oer_materials DELETE the OER material from the elasticsearch index.
+     * @apiVersion 1.0.0
+     * @apiName esSearchAPI
+     * @apiGroup search
+     */
+    // TODO: define the route
+    router.delete("/oer_materials", (req, res) => {
+        throw new ErrorHandler(404, "Route not found");
+    });
+
 
     // return the router
     return router;
