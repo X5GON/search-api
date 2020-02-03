@@ -51,9 +51,9 @@ module.exports = (config) => {
                 text,
                 type,
                 languages,
+                provider_id,
                 limit,
                 page,
-                provider_id
             }
         } = req;
 
@@ -66,15 +66,20 @@ module.exports = (config) => {
         }
 
         // get the filter parameters (type and language)
-        const types = type && ["text", "video", "audio"].includes(type) ? type : null;
-        const filterFlag = languages || type;
+        let typegroup;
+        let filetypes;
+        if (type && ["all", "text", "video", "audio"].includes(type)) {
+            typegroup = type === "all" ? null : type;
+        } else if (type && type.split(",").length > 0) {
+            filetypes = type.split(",").map((t) => `.*\.${t}`).join("|");
+        }
 
         // set default pagination values
         if (!limit) {
             limit = DEFAULT_LIMIT;
-        } else if (limit > 0) {
+        } else if (limit <= 0) {
             limit = DEFAULT_LIMIT;
-        } else if (limit <= MAX_LIMIT) {
+        } else if (limit >= MAX_LIMIT) {
             limit = MAX_LIMIT;
         }
         req.query.limit = limit;
@@ -82,6 +87,23 @@ module.exports = (config) => {
             page = DEFAULT_PAGE;
             req.query.page = page;
         }
+
+        // add the must filter values
+        const mustFilters = [];
+        if (provider_id) {
+            mustFilters.push({
+                match: { provider_id }
+            });
+        }
+        if (filetypes) {
+            mustFilters.push({
+                regexp: { material_url: filetypes }
+            });
+        }
+
+        const mustFilterFlag = mustFilters.length;
+        // check if we need to filter the documents
+        const filterFlag = languages || typegroup;
 
         // which part of the materials do we want to query
         const size = limit;
@@ -115,14 +137,14 @@ module.exports = (config) => {
                             }
                         }
                     }],
-                    ...provider_id && {
-                        must: [{ match: { provider_id } }]
+                    ...mustFilterFlag && {
+                        must: mustFilters
                     },
                     ...filterFlag && {
                         filter: {
                             bool: {
-                                ...types && { must: [{ term: { type: types } }] },
-                                ...languages && { should: { terms: { language: languages } } }
+                                ...typegroup && { must: { term: { type: typegroup } } },
+                                ...languages && { must: { terms: { language: languages } } }
                             }
                         }
                     }
