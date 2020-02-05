@@ -39,8 +39,10 @@ module.exports = (config) => {
         query("text").trim(),
         query("type").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
+        query("license").optional().trim()
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
         query("languages").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.split(",") : null)),
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_id").optional().toInt(),
         query("limit").optional().toInt(),
         query("page").optional().toInt(),
@@ -52,6 +54,7 @@ module.exports = (config) => {
                 type,
                 languages,
                 provider_id,
+                license,
                 limit,
                 page,
             }
@@ -71,7 +74,7 @@ module.exports = (config) => {
         if (type && ["all", "text", "video", "audio"].includes(type)) {
             typegroup = type === "all" ? null : type;
         } else if (type && type.split(",").length > 0) {
-            filetypes = type.split(",").map((t) => `.*\.${t}`).join("|");
+            filetypes = type.split(",").map((t) => `.*\.${t.trim()}`).join("|");
         }
 
         // set default pagination values
@@ -89,22 +92,35 @@ module.exports = (config) => {
         }
 
         // add the must filter values
-        const mustFilters = [];
+        const mustConditions = [];
         if (provider_id) {
-            mustFilters.push({
+            mustConditions.push({
                 match: { provider_id }
             });
         }
         if (filetypes) {
-            mustFilters.push({
+            mustConditions.push({
                 regexp: { material_url: filetypes }
             });
         }
 
-        const mustFilterFlag = mustFilters.length;
         // check if we need to filter the documents
-        const filterFlag = languages || typegroup;
-
+        const filterFlag = languages || typegroup || license;
+        const filterMustTerms = [];
+        if (typegroup) {
+            filterMustTerms.push({
+                term: {
+                    type: typegroup
+                }
+            });
+        }
+        if (license) {
+            filterMustTerms.push({
+                term: {
+                    "license.short_name": license
+                }
+            });
+        }
         // which part of the materials do we want to query
         const size = limit;
         const from = (page - 1) * size;
@@ -137,14 +153,14 @@ module.exports = (config) => {
                             }
                         }
                     }],
-                    ...mustFilterFlag && {
-                        must: mustFilters
+                    ...mustConditions.length && {
+                        must: mustConditions
                     },
                     ...filterFlag && {
                         filter: {
                             bool: {
-                                ...typegroup && { must: { term: { type: typegroup } } },
-                                ...languages && { must: { terms: { language: languages } } }
+                                ...filterMustTerms.length && { must: filterMustTerms },
+                                ...languages && { must: { terms: { language: languages } } },
                             }
                         }
                     }
@@ -166,7 +182,7 @@ module.exports = (config) => {
                 retrieved_date: hit._source.retrieved_date,
                 type: hit._source.type,
                 mimetype: hit._source.mimetype,
-                url: hit._source.material_url,
+                material_url: hit._source.material_url,
                 website_url: hit._source.website_url,
                 language: hit._source.language,
                 license: hit._source.license,
@@ -208,6 +224,7 @@ module.exports = (config) => {
                 }
             });
         } catch (error) {
+            console.log(error);
             throw new ErrorHandler(500, "Internal server error");
         }
     });

@@ -38,7 +38,8 @@ class ElasticSearch {
      * index was previously present. Otherwise, null.
      */
     async deleteIndex(index) {
-        if (await this.client.indices.exists({ index })) {
+        const { body: exists } = await this.client.indices.exists({ index });
+        if (exists) {
             return await this.client.indices.delete({ index });
         }
         return null;
