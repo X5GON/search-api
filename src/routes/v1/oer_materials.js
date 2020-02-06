@@ -9,7 +9,7 @@ const ElasticSearch = require("../../library/elasticsearch");
 const { ErrorHandler } = require("../../library/error");
 
 // validating the query parameters
-const { query } = require("express-validator");
+const { query, body } = require("express-validator");
 
 // creation of the query string to help the user navigate through
 const querystring = require("querystring");
@@ -39,11 +39,16 @@ module.exports = (config) => {
         query("text").trim(),
         query("type").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
-        query("license").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
+        query("licenses").optional().trim()
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
-        query("provider_id").optional().toInt(),
+        query("languages_content").optional().trim()
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+        query("provider_ids").optional().trim()
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((value) => parseInt(value)) : null)),
+        query("wikipedia").optional().toBoolean(),
+        query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
         query("page").optional().toInt(),
     ], async (req, res) => {
@@ -53,8 +58,11 @@ module.exports = (config) => {
                 text,
                 type,
                 languages,
-                provider_id,
-                license,
+                languages_content,
+                provider_ids,
+                licenses,
+                wikipedia,
+                wikipedia_limit,
                 limit,
                 page,
             }
@@ -68,14 +76,9 @@ module.exports = (config) => {
             });
         }
 
-        // get the filter parameters (type and language)
-        let typegroup;
-        let filetypes;
-        if (type && ["all", "text", "video", "audio"].includes(type)) {
-            typegroup = type === "all" ? null : type;
-        } else if (type && type.split(",").length > 0) {
-            filetypes = type.split(",").map((t) => `.*\.${t.trim()}`).join("|");
-        }
+        // ------------------------------------
+        // Set pagination parameters
+        // ------------------------------------
 
         // set default pagination values
         if (!limit) {
@@ -91,41 +94,90 @@ module.exports = (config) => {
             req.query.page = page;
         }
 
-        // add the must filter values
-        const mustConditions = [];
-        if (provider_id) {
-            mustConditions.push({
-                match: { provider_id }
+        // ------------------------------------
+        // Set query parameters
+        // ------------------------------------
+
+        // set the nested must conditions for the "contents" attribute
+        const nestedContentsMust = [{
+            term: {
+                "contents.extension": "plain"
+            }
+        }];
+        if (languages_content) {
+            nestedContentsMust.push({
+                terms: { "contents.language": languages_content }
             });
         }
+
+        // ------------------------------------
+        // Set filter parameters
+        // ------------------------------------
+
+        // get the filter parameters (type and language)
+        let typegroup;
+        let filetypes;
+        if (type && ["all", "text", "video", "audio"].includes(type)) {
+            typegroup = type === "all" ? null : type;
+        } else if (type && type.split(",").length > 0) {
+            filetypes = type.split(",").map((t) => `.*\.${t.trim()}`).join("|");
+        }
+
+        // add the filter conditions for the regex
+        const filterMustRegexp = [];
         if (filetypes) {
-            mustConditions.push({
+            filterMustRegexp.push({
                 regexp: { material_url: filetypes }
+            });
+        }
+        // add the filter conditions for the term
+        const filterMustTerm = [];
+        if (typegroup) {
+            filterMustTerm.push({
+                term: { type: typegroup }
+            });
+        }
+        if (licenses && licenses.length && !licenses.includes("cc")) {
+            filterMustTerm.push({
+                terms: { "license.short_name": licenses }
+            });
+        }
+        // add the filter conditions for multiple terms
+        const filterMustTerms = [];
+        if (provider_ids) {
+            filterMustTerms.push({
+                terms: { provider_id: provider_ids }
+            });
+        }
+        if (languages) {
+            filterMustTerms.push({
+                terms: { language: languages }
+            });
+        }
+
+        // add the filter condition for existing fields
+        const filterMustExist = [];
+        if (licenses && licenses.length && licenses.includes("cc")) {
+            filterMustExist.push({
+                exists: { field: "license.url" }
             });
         }
 
         // check if we need to filter the documents
-        const filterFlag = languages || typegroup || license;
-        const filterMustTerms = [];
-        if (typegroup) {
-            filterMustTerms.push({
-                term: {
-                    type: typegroup
-                }
-            });
-        }
-        if (license) {
-            filterMustTerms.push({
-                term: {
-                    "license.short_name": license
-                }
-            });
-        }
+        const filterFlag = filterMustRegexp.length
+            || filterMustTerm.length
+            || filterMustTerms.length
+            || filterMustExist.length;
+
         // which part of the materials do we want to query
         const size = limit;
         const from = (page - 1) * size;
-        // assign the appropriate index
-        const index = "oer_materials";
+
+
+        // ------------------------------------
+        // Set the elasticsearch query body
+        // ------------------------------------
+
         // assign the elasticsearch query object
         const body = {
             from, // set the from parameter from the "limit", "offset", "page" params
@@ -148,19 +200,18 @@ module.exports = (config) => {
                             query: {
                                 bool: {
                                     should: { match: { "contents.value": text } },
-                                    must: { term: { "contents.extension": "plain" } }
+                                    must: nestedContentsMust
                                 }
                             }
                         }
                     }],
-                    ...mustConditions.length && {
-                        must: mustConditions
-                    },
                     ...filterFlag && {
                         filter: {
                             bool: {
+                                ...filterMustRegexp.length && { must: filterMustRegexp },
+                                ...filterMustTerm.length && { must: filterMustTerm },
                                 ...filterMustTerms.length && { must: filterMustTerms },
-                                ...languages && { must: { terms: { language: languages } } },
+                                ...filterMustExist.length && { must: filterMustExist }
                             }
                         }
                     }
@@ -171,7 +222,7 @@ module.exports = (config) => {
 
         try {
             // get the search results from elasticsearch
-            const results = await es.search(index, body);
+            const results = await es.search("oer_materials", body);
             // format the output before sending
             const output = results.hits.hits.map((hit) => ({
                 weight: hit._score,
@@ -191,7 +242,12 @@ module.exports = (config) => {
                     name: hit._source.provider_name,
                     domain: hit._source.provider_url,
                 },
-                content_ids: hit._source.contents.map((content) => content.content_id)
+                content_ids: hit._source.contents.map((content) => content.content_id),
+                ...wikipedia && {
+                    wikipedia: wikipedia_limit && wikipedia_limit > 0
+                        ? hit._source.wikipedia.slice(0, wikipedia_limit)
+                        : hit._source.wikipedia
+                }
             }));
 
             // prepare the parameters for the previous query
@@ -224,7 +280,6 @@ module.exports = (config) => {
                 }
             });
         } catch (error) {
-            console.log(error);
             throw new ErrorHandler(500, "Internal server error");
         }
     });
@@ -235,20 +290,77 @@ module.exports = (config) => {
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    // TODO: define the route
-    router.post("/oer_materials", (req, res) => {
-        throw new ErrorHandler(404, "Route not found");
+    router.post("/oer_materials", async (req, res) => {
+        const {
+            body: { record }
+        } = req;
+
+        try {
+            // get the record and push it to the elasticsearch index
+            await es.pushRecord("oer_materials", record);
+            // refresh the index after pushing the new record
+            await es.refreshIndex("oer_materials");
+            // return the material id of the added record
+            return res.status(200).json({ message: "record pushed to the index" });
+        } catch (error) {
+            throw new ErrorHandler(500, "Internal server error");
+        }
     });
 
     /**
-     * @api {PUT} /api/v1/oer_materials Update the OER material in the elasticsearch index.
+     * @api {PATCH} /api/v1/oer_materials Update the OER material in the elasticsearch index.
      * @apiVersion 1.0.0
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    // TODO: define the route
-    router.put("/oer_materials", (req, res) => {
-        throw new ErrorHandler(404, "Route not found");
+    router.patch("/oer_materials", [
+        body("material_id").toInt(),
+    ], async (req, res) => {
+        const {
+            body: {
+                material_id,
+                record
+            }
+        } = req;
+
+        if (!material_id) {
+            return res.status(400).json({
+                message: "body parameter material_id not an integer",
+                query: { material_id }
+            });
+        }
+
+        // get the elasticsearch id of the document
+        const get_document_id_query = {
+            query: {
+                bool: {
+                    must: [{ match: { material_id } }]
+                }
+            }
+        };
+
+        // get the search results from elasticsearch
+        const results = await es.search("oer_materials", get_document_id_query);
+        // get the elasticsearch document id
+        if (results.hits.hits.length !== 1) {
+            // no document with given material_id found in elasticsearch
+            return res.status(400).json({
+                message: "record with material_id not in elasticsearch"
+            });
+        }
+
+        try {
+            // get the elasticsearch document id
+            const documentId = results.hits.hits[0]._id;
+            // update the record in the elasticsearch index
+            await es.updateRecord("oer_materials", documentId, record);
+            // refresh the elasticsearch index
+            await es.refreshIndex("oer_materials");
+            // return the status as the response
+            return res.status(200).json({ message: "record updated in the index" });
+        } catch (error) {
+            throw new ErrorHandler(500, "Internal server error");
+        }
     });
 
     /**
@@ -257,9 +369,46 @@ module.exports = (config) => {
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    // TODO: define the route
-    router.delete("/oer_materials", (req, res) => {
-        throw new ErrorHandler(404, "Route not found");
+    router.delete("/oer_materials", [
+        query("material_id").toInt()
+    ], async (req, res) => {
+        const {
+            query: { material_id }
+        } = req;
+
+
+        if (!material_id) {
+            return res.status(400).json({
+                message: "query parameter material_id not an integer",
+                query: { material_id }
+            });
+        }
+
+        // get the elasticsearch id of the document
+        const get_document_id_query = {
+            query: {
+                bool: {
+                    must: [{ match: { material_id } }]
+                }
+            }
+        };
+
+        // get the search results from elasticsearch
+        const results = await es.search("oer_materials", get_document_id_query);
+        try {
+            // delete all results that match the material_id
+            const deleteRecords = [];
+            for (let record of results.hits.hits) {
+                deleteRecords.push(es.deleteRecord("oer_materials", record._id));
+            }
+            await Promise.all(deleteRecords);
+            // refresh the elasticsearch index
+            await es.refreshIndex("oer_materials");
+            // return the status as the response
+            return res.status(200).json({ message: "record deleted in the index" });
+        } catch (error) {
+            throw new ErrorHandler(500, "Internal server error");
+        }
     });
 
 

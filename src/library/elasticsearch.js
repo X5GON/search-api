@@ -75,10 +75,11 @@ class ElasticSearch {
      * @returns {Object} The elasticsearch update object.
      */
     async updateRecord(index, documentId, body) {
-        return this.client.update({
+        return await this.client.update({
             index,
+            type: "_doc",
             id: documentId,
-            body
+            body: { doc: body }
         });
     }
 
@@ -89,7 +90,7 @@ class ElasticSearch {
      * @returns {Object} The elasticsearch delete object.
      */
     async deleteRecord(index, documentId) {
-        return this.client.delete({
+        return await this.client.delete({
             id: documentId,
             index
         });

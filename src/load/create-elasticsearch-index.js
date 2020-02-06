@@ -77,11 +77,13 @@ const pg_command = `
 
     SELECT
         OERS.*,
-        CONTENTS.contents
+        CONTENTS.contents,
+        cast(fp.value->>'value' AS json) as wikipedia
     FROM OERS
     LEFT JOIN CONTENTS ON CONTENTS.material_id = OERS.material_id
+    LEFT JOIN features_public AS fp ON fp.record_id=OERS.material_id
+    WHERE fp.table_name='oer_materials' AND fp.name='wikipedia_concepts'
     ORDER BY OERS.material_id DESC;
-
 `;
 
 async function populate() {
@@ -109,6 +111,7 @@ async function populate() {
                     provider_url: { type: "keyword" },
 
                     language: { type: "keyword" },
+
                     license: {
                         type: "object",
                         properties: {
@@ -117,6 +120,7 @@ async function populate() {
                             url: { type: "keyword" }
                         }
                     },
+
                     contents: {
                         type: "nested",
                         properties: {
@@ -125,6 +129,21 @@ async function populate() {
                             extension: { type: "keyword" },
                             language: { type: "keyword" },
                             value: { type: "text" }
+                        }
+                    },
+
+                    wikipedia: {
+                        type: "nested",
+                        properties: {
+                            lang: { type: "keyword" },
+                            uri: { type: "keyword" },
+                            name: { type: "text" },
+                            sec_uri: { type: "keyword" },
+                            sec_name: { type: "text" },
+                            db_pedia_iri: { type: "keyword" },
+                            cosine: { type: "float" },
+                            pagerank: { type: "float" },
+                            support: { type: "long" }
                         }
                     }
                 }
@@ -172,6 +191,25 @@ async function populate() {
                         disclaimer,
                         url
                     };
+
+                    // modify the wikipedia array
+                    for (let value of record.wikipedia) {
+                        // rename the wikipedia concepts
+                        value.sec_uri = value.secUri;
+                        value.sec_name = value.secName;
+                        value.pagerank = value.pageRank;
+                        value.db_pedia_iri = value.dbPediaIri;
+                        value.support = value.supportLen;
+                        value.wiki_data_classes = value.wikiDataClasses;
+                        // delete the previous values
+                        delete value.secUri;
+                        delete value.secName;
+                        delete value.pageRank;
+                        delete value.dbPediaIri;
+                        delete value.supportLen;
+                        delete value.wikiDataClasses;
+                    }
+
                     tasks.push((xcallback) => {
                         es.pushRecord("oer_materials", record)
                             .then((results) => {
@@ -179,7 +217,6 @@ async function populate() {
                                 xcallback(null);
                             })
                             .catch((error) => xcallback);
-
                     });
                 }
 

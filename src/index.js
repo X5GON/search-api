@@ -49,8 +49,6 @@ app.use((err, req, res, next) => {
 });
 
 // start the express server
-const server = app.listen(config.port, () => {
-    console.log("Running on port", config.port);
-});
+const server = app.listen(config.port);
 
 module.exports = server;
