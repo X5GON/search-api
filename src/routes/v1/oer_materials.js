@@ -256,8 +256,8 @@ module.exports = (config) => {
                 retrieved_date: hit._source.retrieved_date,
                 type: hit._source.type,
                 mimetype: hit._source.mimetype,
-                material_url: hit._source.material_url,
-                website_url: hit._source.website_url,
+                url: hit._source.material_url,
+                website: hit._source.website_url,
                 language: hit._source.language,
                 license: hit._source.license,
                 provider: {
@@ -413,8 +413,8 @@ module.exports = (config) => {
                 retrieved_date: hit._source.retrieved_date,
                 type: hit._source.type,
                 mimetype: hit._source.mimetype,
-                material_url: hit._source.material_url,
-                website_url: hit._source.website_url,
+                url: hit._source.material_url,
+                website: hit._source.website_url,
                 language: hit._source.language,
                 license: hit._source.license,
                 provider: {
