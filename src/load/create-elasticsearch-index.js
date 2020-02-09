@@ -85,10 +85,13 @@ const pg_command = `
     WHERE fp.table_name='oer_materials' AND fp.name='wikipedia_concepts'
     ORDER BY OERS.material_id DESC;
 `;
-
+console.log("preparation");
 async function populate() {
+    console.log("deleting index");
     // delete the existing index
     await es.deleteIndex("oer_materials");
+
+    console.log("creating index");
     // the index does not exist yet
     await es.createIndex({
         index: "oer_materials",
@@ -155,8 +158,12 @@ async function populate() {
     const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
     const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
 
+
     let count = 0;
     const promise = new Promise((resolve, reject) => {
+
+        console.log("executing pg-command");
+
         pg.executeLarge(pg_command, [], 100,
             (error, records, callback) => {
                 if (error) { console.log(error); return; }
@@ -211,7 +218,7 @@ async function populate() {
                     }
 
                     tasks.push((xcallback) => {
-                        es.pushRecord("oer_materials", record)
+                        es.pushRecord("oer_materials", record, record.material_id)
                             .then((results) => {
                                 count++;
                                 xcallback(null);
@@ -237,8 +244,11 @@ async function populate() {
     });
 
     await promise;
+    console.log("refreshing index");
     // force the index to refresh to get the results
     await es.refreshIndex("oer_materials");
+
+    console.log("done");
 }
 
 populate().catch((error) => {

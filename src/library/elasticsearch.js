@@ -60,8 +60,9 @@ class ElasticSearch {
      * @param {Object} body - The body of the record being pushed to the index.
      * @returns {Object} The elasticsearch record creation record.
      */
-    async pushRecord(index, body) {
+    async pushRecord(index, body, documentId = null) {
         return await this.client.index({
+            ...documentId && { id: documentId },
             index,
             body
         });
@@ -108,6 +109,7 @@ class ElasticSearch {
         });
         return body;
     }
+
 }
 
 module.exports = ElasticSearch;

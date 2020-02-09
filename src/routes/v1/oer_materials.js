@@ -8,11 +8,30 @@ const router = require("express").Router();
 const ElasticSearch = require("../../library/elasticsearch");
 const { ErrorHandler } = require("../../library/error");
 
+
+// internal modules
+const mimetypes = require("../../config/mimetypes");
+
 // validating the query parameters
-const { query, body } = require("express-validator");
+const { query, body, param } = require("express-validator");
 
 // creation of the query string to help the user navigate through
 const querystring = require("querystring");
+
+/**
+ * Returns the general material type.
+ * @param {String} mimetype - The document mimetype.
+ * @returns {String|Null} The material type.
+ */
+function materialType(mimetype) {
+    for (let type in mimetypes) {
+        if (mimetypes[type].includes(mimetype)) {
+            return type;
+        }
+    }
+    return null;
+}
+
 
 /**
  * @description Assign the elasticsearch API routes.
@@ -24,6 +43,10 @@ module.exports = (config) => {
     const DEFAULT_LIMIT = 20;
     const MAX_LIMIT = 100;
     const DEFAULT_PAGE = 1;
+    // set the default disclaimer parameter
+    const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
+    const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
+
 
     // esablish connection with elasticsearch
     const es = new ElasticSearch(config.elasticsearch);
@@ -69,10 +92,9 @@ module.exports = (config) => {
         } = req;
 
         if (!text) {
-            // return the error message of the missing parameter
-            return res.json({
-                error: { message: "Missing parameter 'text'" },
-                query: { ...req.query }
+            return res.status(400).json({
+                message: "query parameter 'text' not available",
+                query: req.query
             });
         }
 
@@ -204,20 +226,21 @@ module.exports = (config) => {
                                 }
                             }
                         }
-                    }],
-                    ...filterFlag && {
-                        filter: {
-                            bool: {
-                                ...filterMustRegexp.length && { must: filterMustRegexp },
-                                ...filterMustTerm.length && { must: filterMustTerm },
-                                ...filterMustTerms.length && { must: filterMustTerms },
-                                ...filterMustExist.length && { must: filterMustExist }
-                            }
+                    }]
+                },
+                ...filterFlag && {
+                    filter: {
+                        bool: {
+                            ...filterMustRegexp.length && { must: filterMustRegexp },
+                            ...filterMustExist.length && { must: filterMustExist },
+                            ...filterMustTerms.length && { must: filterMustTerms },
+                            ...filterMustTerm.length && { must: filterMustTerm },
+
                         }
                     }
                 }
             },
-            min_score: 5,
+            min_score: 5
         };
 
         try {
@@ -296,30 +319,77 @@ module.exports = (config) => {
         } = req;
 
         try {
+
+            record.title = record.title.replace(/\r*\n+/g, " ").replace(/\t+/g, " ").trim();
+            if (record.description) {
+                record.description = record.description.replace(/\r*\n+/g, " ").replace(/\t+/g, " ").trim();
+            }
+            record.extension = record.type;
+            record.type = materialType(record.mimetype);
+
+            // modify the license attribute when sending to elasticsearch
+            const url = record.license;
+            let short_name;
+            let typed_name;
+            let disclaimer = DEFAULT_DISCLAIMER;
+
+            if (url) {
+                const regex = /\/licen[sc]es\/([\w\-]+)\//;
+                short_name = url.match(regex)[1];
+                typed_name = short_name.split("-");
+            } else {
+                short_name = NO_LICENSE_DISCLAIMER;
+            }
+            record.license = {
+                short_name,
+                typed_name,
+                disclaimer,
+                url
+            };
+
+            // modify the wikipedia array
+            for (let value of record.wikipedia) {
+                // rename the wikipedia concepts
+                value.sec_uri = value.secUri;
+                value.sec_name = value.secName;
+                value.pagerank = value.pageRank;
+                value.db_pedia_iri = value.dbPediaIri;
+                value.support = value.supportLen;
+                value.wiki_data_classes = value.wikiDataClasses;
+                // delete the previous values
+                delete value.secUri;
+                delete value.secName;
+                delete value.pageRank;
+                delete value.dbPediaIri;
+                delete value.supportLen;
+                delete value.wikiDataClasses;
+            }
+
             // get the record and push it to the elasticsearch index
-            await es.pushRecord("oer_materials", record);
+            await es.pushRecord("oer_materials", record, record.material_id);
             // refresh the index after pushing the new record
             await es.refreshIndex("oer_materials");
             // return the material id of the added record
             return res.status(200).json({ message: "record pushed to the index" });
         } catch (error) {
+            console.log(error);
             throw new ErrorHandler(500, "Internal server error");
         }
     });
 
-    /**
-     * @api {PATCH} /api/v1/oer_materials Update the OER material in the elasticsearch index.
-     * @apiVersion 1.0.0
-     * @apiName esSearchAPI
-     * @apiGroup search
-     */
-    router.patch("/oer_materials", [
-        body("material_id").toInt(),
+
+    router.get("/oer_materials/:material_id", [
+        param("material_id").toInt(),
+        query("wikipedia").optional().toBoolean(),
+        query("wikipedia_limit").optional().toInt(),
     ], async (req, res) => {
         const {
-            body: {
-                material_id,
-                record
+            params: {
+                material_id
+            },
+            query: {
+                wikipedia,
+                wikipedia_limit
             }
         } = req;
 
@@ -330,30 +400,89 @@ module.exports = (config) => {
             });
         }
 
-        // get the elasticsearch id of the document
-        const get_document_id_query = {
-            query: {
-                bool: {
-                    must: [{ match: { material_id } }]
+        try {
+            const results = await es.search("oer_materials", {
+                query: { terms: { _id: [material_id] } }
+            });
+            // format the output before sending
+            const output = results.hits.hits.map((hit) => ({
+                material_id: hit._source.material_id,
+                title: hit._source.title,
+                description: hit._source.description,
+                creation_date: hit._source.creation_date,
+                retrieved_date: hit._source.retrieved_date,
+                type: hit._source.type,
+                mimetype: hit._source.mimetype,
+                material_url: hit._source.material_url,
+                website_url: hit._source.website_url,
+                language: hit._source.language,
+                license: hit._source.license,
+                provider: {
+                    id: hit._source.provider_id,
+                    name: hit._source.provider_name,
+                    domain: hit._source.provider_url,
+                },
+                content_ids: hit._source.contents.map((content) => content.content_id),
+                ...wikipedia && {
+                    wikipedia: wikipedia_limit && wikipedia_limit > 0
+                        ? hit._source.wikipedia.slice(0, wikipedia_limit)
+                        : hit._source.wikipedia
                 }
-            }
-        };
+            }))[0];
 
-        // get the search results from elasticsearch
-        const results = await es.search("oer_materials", get_document_id_query);
-        // get the elasticsearch document id
-        if (results.hits.hits.length !== 1) {
-            // no document with given material_id found in elasticsearch
+            // return the status as the response
+            return res.status(200).json({
+                oer_materials: output
+            });
+        } catch (error) {
+            throw new ErrorHandler(500, "Internal server error");
+        }
+    });
+
+
+    /**
+     * @api {PATCH} /api/v1/oer_materials Update the OER material in the elasticsearch index.
+     * @apiVersion 1.0.0
+     * @apiName esSearchAPI
+     * @apiGroup search
+     */
+    router.patch("/oer_materials/:material_id", [
+        param("material_id").toInt(),
+    ], async (req, res) => {
+        const {
+            params: { material_id },
+            body: { record }
+        } = req;
+
+        if (!material_id) {
             return res.status(400).json({
-                message: "record with material_id not in elasticsearch"
+                message: "body parameter material_id not an integer",
+                query: { material_id }
             });
         }
 
+
         try {
-            // get the elasticsearch document id
-            const documentId = results.hits.hits[0]._id;
+            // modify the wikipedia array
+            for (let value of record.wikipedia) {
+                // rename the wikipedia concepts
+                value.sec_uri = value.secUri;
+                value.sec_name = value.secName;
+                value.pagerank = value.pageRank;
+                value.db_pedia_iri = value.dbPediaIri;
+                value.support = value.supportLen;
+                value.wiki_data_classes = value.wikiDataClasses;
+                // delete the previous values
+                delete value.secUri;
+                delete value.secName;
+                delete value.pageRank;
+                delete value.dbPediaIri;
+                delete value.supportLen;
+                delete value.wikiDataClasses;
+            }
+
             // update the record in the elasticsearch index
-            await es.updateRecord("oer_materials", documentId, record);
+            await es.updateRecord("oer_materials", material_id, record);
             // refresh the elasticsearch index
             await es.refreshIndex("oer_materials");
             // return the status as the response
@@ -363,45 +492,23 @@ module.exports = (config) => {
         }
     });
 
+
     /**
      * @api {DELETE} /api/v1/oer_materials DELETE the OER material from the elasticsearch index.
      * @apiVersion 1.0.0
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    router.delete("/oer_materials", [
-        query("material_id").toInt()
+    router.delete("/oer_materials/:material_id", [
+        param("material_id").toInt()
     ], async (req, res) => {
         const {
-            query: { material_id }
+            params: { material_id }
         } = req;
 
-
-        if (!material_id) {
-            return res.status(400).json({
-                message: "query parameter material_id not an integer",
-                query: { material_id }
-            });
-        }
-
-        // get the elasticsearch id of the document
-        const get_document_id_query = {
-            query: {
-                bool: {
-                    must: [{ match: { material_id } }]
-                }
-            }
-        };
-
-        // get the search results from elasticsearch
-        const results = await es.search("oer_materials", get_document_id_query);
         try {
             // delete all results that match the material_id
-            const deleteRecords = [];
-            for (let record of results.hits.hits) {
-                deleteRecords.push(es.deleteRecord("oer_materials", record._id));
-            }
-            await Promise.all(deleteRecords);
+            await es.deleteRecord("oer_materials", material_id);
             // refresh the elasticsearch index
             await es.refreshIndex("oer_materials");
             // return the status as the response
