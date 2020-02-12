@@ -122,9 +122,7 @@ module.exports = (config) => {
 
         // set the nested must conditions for the "contents" attribute
         const nestedContentsMust = [{
-            term: {
-                "contents.extension": "plain"
-            }
+            term: { "contents.extension": "plain" }
         }];
         if (languages_content) {
             nestedContentsMust.push({
@@ -146,50 +144,44 @@ module.exports = (config) => {
         }
 
         // add the filter conditions for the regex
-        const filterMustRegexp = [];
+        const filters = [];
         if (filetypes) {
-            filterMustRegexp.push({
+            filters.push({
                 regexp: { material_url: filetypes }
             });
         }
         // add the filter conditions for the term
-        const filterMustTerm = [];
         if (typegroup) {
-            filterMustTerm.push({
+            filters.push({
                 term: { type: typegroup }
             });
         }
         if (licenses && licenses.length && !licenses.includes("cc")) {
-            filterMustTerm.push({
+            filters.push({
                 terms: { "license.short_name": licenses }
             });
         }
         // add the filter conditions for multiple terms
-        const filterMustTerms = [];
         if (provider_ids) {
-            filterMustTerms.push({
+            filters.push({
                 terms: { provider_id: provider_ids }
             });
         }
         if (languages) {
-            filterMustTerms.push({
+            filters.push({
                 terms: { language: languages }
             });
         }
 
         // add the filter condition for existing fields
-        const filterMustExist = [];
         if (licenses && licenses.length && licenses.includes("cc")) {
-            filterMustExist.push({
+            filters.push({
                 exists: { field: "license.url" }
             });
         }
 
         // check if we need to filter the documents
-        const filterFlag = filterMustRegexp.length
-            || filterMustTerm.length
-            || filterMustTerms.length
-            || filterMustExist.length;
+        const filterFlag = filters.length;
 
         // which part of the materials do we want to query
         const size = limit;
@@ -226,17 +218,9 @@ module.exports = (config) => {
                                 }
                             }
                         }
-                    }]
-                },
-                ...filterFlag && {
-                    filter: {
-                        bool: {
-                            ...filterMustRegexp.length && { must: filterMustRegexp },
-                            ...filterMustExist.length && { must: filterMustExist },
-                            ...filterMustTerms.length && { must: filterMustTerms },
-                            ...filterMustTerm.length && { must: filterMustTerm },
-
-                        }
+                    }],
+                    ...filterFlag && {
+                        filter: filters
                     }
                 }
             },
@@ -262,7 +246,7 @@ module.exports = (config) => {
                 license: hit._source.license,
                 provider: {
                     id: hit._source.provider_id,
-                    name: hit._source.provider_name,
+                    name: hit._source.provider_name.toLowerCase(),
                     domain: hit._source.provider_url,
                 },
                 content_ids: hit._source.contents.map((content) => content.content_id),
@@ -372,7 +356,6 @@ module.exports = (config) => {
             // return the material id of the added record
             return res.status(200).json({ message: "record pushed to the index" });
         } catch (error) {
-            console.log(error);
             throw new ErrorHandler(500, "Internal server error");
         }
     });
@@ -419,7 +402,7 @@ module.exports = (config) => {
                 license: hit._source.license,
                 provider: {
                     id: hit._source.provider_id,
-                    name: hit._source.provider_name,
+                    name: hit._source.provider_name.toLowerCase(),
                     domain: hit._source.provider_url,
                 },
                 content_ids: hit._source.contents.map((content) => content.content_id),
