@@ -1,6 +1,6 @@
 module.exports = {
     apps: [{
-        name: "X5GON ElasticSearch API",
+        name: "X5GON Search API",
         script: "src/index.js",
         instances: 4,
         exec_mode: "cluster",
