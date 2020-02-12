@@ -1,4 +1,4 @@
-module.exports = {
+{
     apps: [{
         name: "X5GON Search API",
         script: "src/index.js",
@@ -13,6 +13,6 @@ module.exports = {
         },
         env_production: {
             NODE_ENV: "production"
-        },
+        }
     }]
-};
+}
