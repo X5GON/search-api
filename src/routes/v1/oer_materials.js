@@ -278,7 +278,7 @@ module.exports = (config) => {
             // output the materials
             return res.json({
                 query: req.query,
-                oer_materials: output,
+                rec_materials: output,
                 metadata: {
                     total_hits,
                     total_pages,
@@ -415,7 +415,7 @@ module.exports = (config) => {
 
             // return the status as the response
             return res.status(200).json({
-                oer_materials: output
+                rec_materials: output
             });
         } catch (error) {
             throw new ErrorHandler(500, "Internal server error");
