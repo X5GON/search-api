@@ -60,7 +60,7 @@ module.exports = (config) => {
      */
     router.get("/oer_materials", [
         query("text").trim(),
-        query("type").optional().trim()
+        query("types").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
         query("licenses").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
@@ -79,7 +79,7 @@ module.exports = (config) => {
         let {
             query: {
                 text,
-                type,
+                types,
                 languages,
                 content_languages,
                 provider_ids,
@@ -137,10 +137,10 @@ module.exports = (config) => {
         // get the filter parameters (type and language)
         let typegroup;
         let filetypes;
-        if (type && ["all", "text", "video", "audio"].includes(type)) {
-            typegroup = type === "all" ? null : type;
-        } else if (type && type.split(",").length > 0) {
-            filetypes = type.split(",").map((t) => `.*\.${t.trim()}`).join("|");
+        if (types && ["all", "text", "video", "audio"].includes(types)) {
+            typegroup = types === "all" ? null : types;
+        } else if (types && types.split(",").length > 0) {
+            filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
         }
 
         // add the filter conditions for the regex
