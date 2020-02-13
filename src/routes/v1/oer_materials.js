@@ -66,7 +66,7 @@ module.exports = (config) => {
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
-        query("languages_content").optional().trim()
+        query("content_languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((value) => parseInt(value)) : null)),
@@ -81,7 +81,7 @@ module.exports = (config) => {
                 text,
                 type,
                 languages,
-                languages_content,
+                content_languages,
                 provider_ids,
                 licenses,
                 wikipedia,
@@ -124,9 +124,9 @@ module.exports = (config) => {
         const nestedContentsMust = [{
             term: { "contents.extension": "plain" }
         }];
-        if (languages_content) {
+        if (content_languages) {
             nestedContentsMust.push({
-                terms: { "contents.language": languages_content }
+                terms: { "contents.language": content_languages }
             });
         }
 
