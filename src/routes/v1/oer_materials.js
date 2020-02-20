@@ -7,7 +7,7 @@
 const router = require("express").Router();
 const ElasticSearch = require("../../library/elasticsearch");
 const { ErrorHandler } = require("../../library/error");
-
+const translate = require("@vitalets/google-translate-api");
 
 // internal modules
 const mimetypes = require("../../config/mimetypes");
@@ -74,7 +74,7 @@ module.exports = (config) => {
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
         query("page").optional().toInt(),
-    ], async (req, res) => {
+    ], async (req, res, next) => {
         // extract the appropriate query parameters
         let {
             query: {
@@ -189,13 +189,27 @@ module.exports = (config) => {
 
 
         // ------------------------------------
+        // Translate the user input
+        // ------------------------------------
+
+        let translation;
+        try {
+            const trans_response = await translate(text, { to: "en" });
+            // get the translated text
+            translation = trans_response.text;
+        } catch (error) {
+            console.log("Error when translating text");
+            translation = text;
+        }
+
+        // ------------------------------------
         // Set the elasticsearch query body
         // ------------------------------------
 
         // assign the elasticsearch query object
         const body = {
-            from, // set the from parameter from the "limit", "offset", "page" params
-            size, // set the size parameter from the "limit", "offset", "page" params
+            from, // set the from parameter from the "limit", "page" params
+            size, // set the size parameter from the "limit", "page" params
             _source: {
                 excludes: [
                     "contents.type",
@@ -218,13 +232,36 @@ module.exports = (config) => {
                                 }
                             }
                         }
+                    }, {
+                        nested: {
+                            path: "wikipedia",
+                            query: {
+                                bool: {
+                                    must: [
+                                        { match: { "wikipedia.sec_name": translation } },
+                                    ]
+                                }
+                            }
+                        }
                     }],
                     ...filterFlag && {
                         filter: filters
                     }
                 }
             },
-            min_score: 5
+            aggs: {
+                languages: {
+                    terms: { field: "language" }
+                },
+                licenses: {
+                    terms: { field: "license.short_name" }
+                },
+                providers: {
+                    terms: { field: "provider_name" }
+                }
+            },
+            min_score: 5,
+            track_total_hits: true
         };
 
         try {
@@ -249,7 +286,7 @@ module.exports = (config) => {
                     name: hit._source.provider_name.toLowerCase(),
                     domain: hit._source.provider_url,
                 },
-                content_ids: hit._source.contents.map((content) => content.content_id),
+                content_ids: hit._source.contents ? hit._source.contents.map((content) => content.content_id) : [],
                 ...wikipedia && {
                     wikipedia: wikipedia_limit && wikipedia_limit > 0
                         ? hit._source.wikipedia.slice(0, wikipedia_limit)
@@ -275,6 +312,10 @@ module.exports = (config) => {
             const total_pages = Math.ceil(results.hits.total.value / size);
             const prev_page = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
             const next_page = total_pages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
+            results.aggregations.providers.buckets.forEach((provider) => {
+                provider.key = provider.key.toLowerCase();
+            });
+
             // output the materials
             return res.json({
                 query: req.query,
@@ -283,11 +324,16 @@ module.exports = (config) => {
                     total_hits,
                     total_pages,
                     prev_page,
-                    next_page
+                    next_page,
+                    aggregations: {
+                        licenses: results.aggregations.licenses.buckets,
+                        languages: results.aggregations.languages.buckets,
+                        providers: results.aggregations.providers.buckets
+                    }
                 }
             });
         } catch (error) {
-            throw new ErrorHandler(500, "Internal server error");
+            return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
@@ -297,13 +343,12 @@ module.exports = (config) => {
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    router.post("/oer_materials", async (req, res) => {
+    router.post("/oer_materials", async (req, res, next) => {
         const {
             body: { record }
         } = req;
 
         try {
-
             record.title = record.title.replace(/\r*\n+/g, " ").replace(/\t+/g, " ").trim();
             if (record.description) {
                 record.description = record.description.replace(/\r*\n+/g, " ").replace(/\t+/g, " ").trim();
@@ -356,7 +401,7 @@ module.exports = (config) => {
             // return the material id of the added record
             return res.status(200).json({ message: "record pushed to the index" });
         } catch (error) {
-            throw new ErrorHandler(500, "Internal server error");
+            return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
@@ -365,7 +410,7 @@ module.exports = (config) => {
         param("material_id").toInt(),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
-    ], async (req, res) => {
+    ], async (req, res, next) => {
         const {
             params: {
                 material_id
@@ -418,7 +463,7 @@ module.exports = (config) => {
                 rec_materials: output
             });
         } catch (error) {
-            throw new ErrorHandler(500, "Internal server error");
+            return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
@@ -431,7 +476,7 @@ module.exports = (config) => {
      */
     router.patch("/oer_materials/:material_id", [
         param("material_id").toInt(),
-    ], async (req, res) => {
+    ], async (req, res, next) => {
         const {
             params: { material_id },
             body: { record }
@@ -471,7 +516,7 @@ module.exports = (config) => {
             // return the status as the response
             return res.status(200).json({ message: "record updated in the index" });
         } catch (error) {
-            throw new ErrorHandler(500, "Internal server error");
+            return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
@@ -484,7 +529,7 @@ module.exports = (config) => {
      */
     router.delete("/oer_materials/:material_id", [
         param("material_id").toInt()
-    ], async (req, res) => {
+    ], async (req, res, next) => {
         const {
             params: { material_id }
         } = req;
@@ -497,7 +542,7 @@ module.exports = (config) => {
             // return the status as the response
             return res.status(200).json({ message: "record deleted in the index" });
         } catch (error) {
-            throw new ErrorHandler(500, "Internal server error");
+            return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
