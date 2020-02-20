@@ -253,6 +253,9 @@ module.exports = (config) => {
                 languages: {
                     terms: { field: "language" }
                 },
+                types: {
+                    terms: { field: "type" }
+                },
                 licenses: {
                     terms: { field: "license.short_name" }
                 },
@@ -327,6 +330,7 @@ module.exports = (config) => {
                     next_page,
                     aggregations: {
                         licenses: results.aggregations.licenses.buckets,
+                        types: results.aggregations.types.buckets,
                         languages: results.aggregations.languages.buckets,
                         providers: results.aggregations.providers.buckets
                     }
