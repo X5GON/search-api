@@ -309,7 +309,7 @@ module.exports = (config) => {
                 ...page && { page: page + 1 },
             };
 
-            const BASE_URL = "https://platform.x5gon.org/api/v1/oer_materials";
+            const BASE_URL = "https://platform.x5gon.org/api/v1/search";
             // prepare the metadata used to navigate through the search
             const total_hits = results.hits.total.value;
             const total_pages = Math.ceil(results.hits.total.value / size);
