@@ -192,15 +192,15 @@ module.exports = (config) => {
         // Translate the user input
         // ------------------------------------
 
-        let translation;
-        try {
-            const trans_response = await translate(text, { to: "en" });
-            // get the translated text
-            translation = trans_response.text;
-        } catch (error) {
-            console.log("Error when translating text");
-            translation = text;
-        }
+        let translation = text;
+        // try {
+        //     const trans_response = await translate(text, { to: "en" });
+        //     // get the translated text
+        //     translation = trans_response.text;
+        // } catch (error) {
+        //     console.log("Error when translating text");
+        //     translation = text;
+        // }
 
         // ------------------------------------
         // Set the elasticsearch query body
