@@ -6,4 +6,5 @@
 module.exports = function (app, config) {
     // setup the microservices API routes
     app.use("/api/v1", require("./oer_materials")(config));
+    app.use("/api/v1", require("./recommend")(config));
 };

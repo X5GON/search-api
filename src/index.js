@@ -18,10 +18,10 @@ const config = require("./config/config");
 let app = express();
 
 // configure application
-app.use(bodyParser.json({ limit: '10mb' })); // to support JSON-encoded bodies
+app.use(bodyParser.json({ limit: "10mb" })); // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({              // to support URL-encoded bodies
     extended: true,
-    limit: '10mb'
+    limit: "10mb"
 }));
 app.use(cookieParser(config.sessionsecret));
 
