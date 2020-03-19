@@ -4,12 +4,13 @@
   "description": "The template to the nodejs implementation of an elasticsearch microservice",
   "main": "src/index.js",
   "scripts": {
+    "build": "./node_modules/typescript/bin/tsc",
     "start": "node src/index.js",
-    "development": "./node_modules/nodemon/bin/nodemon.js src/index.js",
+    "development": "./node_modules/nodemon/bin/nodemon.js --config ./nodemon.json",
     "load:es": "node src/load/create-elasticsearch-index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "./node_modules/.bin/eslint ./src",
-    "lint:fix": "./node_modules/.bin/eslint --fix ./src"
+    "test": "echo \"Error: no test specified\" && exit 0",
+    "format": "./node_modules/.bin/tsfmt -r",
+    "lint": "./node_modules/.bin/tslint --project ."
   },
   "repository": {
     "type": "git",
@@ -17,9 +18,16 @@
   },
   "keywords": [
     "elasticsearch",
-    "microservice"
+    "microservice",
+    "node.js"
   ],
   "author": "Erik Novak",
+  "contributors": [
+    {
+      "name": "Erik Novak",
+      "email": "erik.novak@ijs.si"
+    }
+  ],
   "license": "BSD-2-Clause",
   "bugs": {
     "url": "https://github.com/ErikNovak/template-nodejs-elasticsearch-microservice/issues"
@@ -27,7 +35,6 @@
   "homepage": "https://github.com/ErikNovak/template-nodejs-elasticsearch-microservice#readme",
   "dependencies": {
     "@elastic/elasticsearch": "^7.5.0",
-    "@vitalets/google-translate-api": "^3.0.0",
     "archiver": "^3.1.1",
     "body-parser": "^1.19.0",
     "cookie-parser": "^1.4.4",
@@ -39,9 +46,21 @@
     "winston-daily-rotate-file": "^4.4.2"
   },
   "devDependencies": {
+    "@types/body-parser": "^1.19.0",
+    "@types/cookie-parser": "^1.4.2",
+    "@types/elasticsearch": "^5.0.36",
+    "@types/express": "^4.17.3",
+    "@types/express-validator": "^3.0.0",
+    "@types/express-winston": "^4.0.0",
+    "@types/node": "^13.9.2",
     "eslint": "^6.1.0",
     "eslint-config-airbnb-base": "^14.0.0",
     "eslint-plugin-import": "^2.20.0",
-    "nodemon": "^2.0.2"
+    "mocha": "^7.1.1",
+    "nodemon": "^2.0.2",
+    "ts-node": "^8.7.0",
+    "tslint": "^6.1.0",
+    "typescript": "^3.8.3",
+    "typescript-formatter": "^7.2.2"
   }
 }

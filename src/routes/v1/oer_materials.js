@@ -5,9 +5,8 @@
  */
 
 const router = require("express").Router();
-const ElasticSearch = require("../../library/elasticsearch");
+const { default: Elasticsearch } = require("../../library/elasticsearch");
 const { ErrorHandler } = require("../../library/error");
-const translate = require("@vitalets/google-translate-api");
 
 // internal modules
 const mimetypes = require("../../config/mimetypes");
@@ -60,7 +59,6 @@ function materialFormat(hit, { wikipedia, wikipedia_limit }) {
     };
 }
 
-
 /**
  * @description Assign the elasticsearch API routes.
  * @param {Object} config - The configuration object.
@@ -75,10 +73,8 @@ module.exports = (config) => {
     const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
     const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
 
-
     // esablish connection with elasticsearch
-    const es = new ElasticSearch(config.elasticsearch);
-
+    const es = new Elasticsearch(config.elasticsearch);
 
     /**
      * @api {GET} /api/v1/oer_materials Search through the OER materials
@@ -97,7 +93,7 @@ module.exports = (config) => {
         query("content_languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((value) => parseInt(value)) : null)),
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
@@ -215,27 +211,18 @@ module.exports = (config) => {
         const size = limit;
         const from = (page - 1) * size;
 
-
         // ------------------------------------
         // Translate the user input
         // ------------------------------------
 
         let translation = text;
-        // try {
-        //     const trans_response = await translate(text, { to: "en" });
-        //     // get the translated text
-        //     translation = trans_response.text;
-        // } catch (error) {
-        //     console.log("Error when translating text");
-        //     translation = text;
-        // }
 
         // ------------------------------------
         // Set the elasticsearch query body
         // ------------------------------------
 
         // assign the elasticsearch query object
-        const body = {
+        const esQuery = {
             from, // set the from parameter from the "limit", "page" params
             size, // set the size parameter from the "limit", "page" params
             _source: {
@@ -297,7 +284,7 @@ module.exports = (config) => {
 
         try {
             // get the search results from elasticsearch
-            const results = await es.search("oer_materials", body);
+            const results = await es.search("oer_materials", esQuery);
             // format the output before sending
             const output = results.hits.hits.map((hit) => materialFormat(hit, { wikipedia, wikipedia_limit }));
 
@@ -315,10 +302,10 @@ module.exports = (config) => {
 
             const BASE_URL = "https://platform.x5gon.org/api/v1/search";
             // prepare the metadata used to navigate through the search
-            const total_hits = results.hits.total.value;
-            const total_pages = Math.ceil(results.hits.total.value / size);
-            const prev_page = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
-            const next_page = total_pages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
+            const totalHits = results.hits.total.value;
+            const totalPages = Math.ceil(results.hits.total.value / size);
+            const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
+            const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
             results.aggregations.providers.buckets.forEach((provider) => {
                 provider.key = provider.key.toLowerCase();
             });
@@ -328,10 +315,10 @@ module.exports = (config) => {
                 query: req.query,
                 rec_materials: output,
                 metadata: {
-                    total_hits,
-                    total_pages,
-                    prev_page,
-                    next_page,
+                    total_hits: totalHits,
+                    total_pages: totalPages,
+                    prev_page: prevPage,
+                    next_page: nextPage,
                     aggregations: {
                         licenses: results.aggregations.licenses.buckets,
                         types: results.aggregations.types.buckets,
@@ -366,20 +353,20 @@ module.exports = (config) => {
 
             // modify the license attribute when sending to elasticsearch
             const url = record.license;
-            let short_name;
-            let typed_name;
+            let shortName;
+            let typedName;
             let disclaimer = DEFAULT_DISCLAIMER;
 
             if (url) {
                 const regex = /\/licen[sc]es\/([\w\-]+)\//;
-                short_name = url.match(regex)[1];
-                typed_name = short_name.split("-");
+                shortName = url.match(regex)[1];
+                typedName = shortName.split("-");
             } else {
-                short_name = NO_LICENSE_DISCLAIMER;
+                shortName = NO_LICENSE_DISCLAIMER;
             }
             record.license = {
-                short_name,
-                typed_name,
+                short_name: shortName,
+                typed_name: typedName,
                 disclaimer,
                 url
             };
@@ -412,7 +399,6 @@ module.exports = (config) => {
             return next(new ErrorHandler(500, "Internal server error"));
         }
     });
-
 
     router.get("/oer_materials/:material_id", [
         param("material_id").toInt(),
@@ -452,7 +438,6 @@ module.exports = (config) => {
         }
     });
 
-
     /**
      * @api {PATCH} /api/v1/oer_materials Update the OER material in the elasticsearch index.
      * @apiVersion 1.0.0
@@ -473,7 +458,6 @@ module.exports = (config) => {
                 query: { material_id }
             });
         }
-
 
         try {
             // modify the wikipedia array
@@ -505,7 +489,6 @@ module.exports = (config) => {
         }
     });
 
-
     /**
      * @api {DELETE} /api/v1/oer_materials DELETE the OER material from the elasticsearch index.
      * @apiVersion 1.0.0
@@ -530,7 +513,6 @@ module.exports = (config) => {
             return next(new ErrorHandler(500, "Internal server error"));
         }
     });
-
 
     // return the router
     return router;

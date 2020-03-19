@@ -5,7 +5,7 @@
  */
 
 const router = require("express").Router();
-const ElasticSearch = require("../../library/elasticsearch");
+const { default: Elasticsearch } = require("../../library/elasticsearch");
 const { ErrorHandler } = require("../../library/error");
 
 // internal modules
@@ -34,14 +34,12 @@ function materialType(mimetype) {
 function materialFormat(hit, { wikipedia, wikipedia_limit }) {
     return {
         weight: hit._score,
-        material_id: hit._source.material_id,
         title: hit._source.title,
         description: hit._source.description,
         creation_date: hit._source.creation_date,
         retrieved_date: hit._source.retrieved_date,
         type: hit._source.type,
         mimetype: hit._source.mimetype,
-        url: hit._source.material_url,
         website: hit._source.website_url,
         language: hit._source.language,
         license: hit._source.license,
@@ -49,16 +47,9 @@ function materialFormat(hit, { wikipedia, wikipedia_limit }) {
             id: hit._source.provider_id,
             name: hit._source.provider_name.toLowerCase(),
             domain: hit._source.provider_url,
-        },
-        content_ids: hit._source.contents ? hit._source.contents.map((content) => content.content_id) : [],
-        ...wikipedia && {
-            wikipedia: wikipedia_limit && wikipedia_limit > 0
-                ? hit._source.wikipedia.slice(0, wikipedia_limit)
-                : hit._source.wikipedia
         }
     };
 }
-
 
 /**
  * @description Assign the elasticsearch API routes.
@@ -71,9 +62,8 @@ module.exports = (config) => {
     const MAX_LIMIT = 100;
     const DEFAULT_PAGE = 1;
 
-
     // esablish connection with elasticsearch
-    const es = new ElasticSearch(config.elasticsearch);
+    const es = new Elasticsearch(config.elasticsearch);
 
     let setLanguages = [];
     es.search("oer_materials", {
@@ -88,14 +78,13 @@ module.exports = (config) => {
             .map((obj) => obj.key);
     });
 
-
     /**
      * @api {GET} /api/v1/oer_materials Search through the OER materials
      * @apiVersion 1.0.0
      * @apiName searchAPI
      * @apiGroup search
      */
-    router.get("/recommend/materials", [
+    router.get("/recommend/bundles", [
         query("text").trim(),
         query("url").trim(),
         query("types").optional().trim()
@@ -107,12 +96,13 @@ module.exports = (config) => {
         query("content_languages").optional().trim()
             .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((value) => parseInt(value)) : null)),
+            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
         query("page").optional().toInt(),
     ], async (req, res, next) => {
+
         // extract the appropriate query parameters
         let {
             query: {
@@ -178,7 +168,6 @@ module.exports = (config) => {
             const startSlice = wikiConcepts.length > 2 ? 2 : 0;
             wikiConcepts = Object.entries(wikiConcepts).sort((a, b) => b[1] - a[1])
                 .slice(startSlice, 20);
-
         } catch (error) {
             return next(new ErrorHandler(500, "Internal server error"));
         }
@@ -285,7 +274,7 @@ module.exports = (config) => {
         // ------------------------------------
 
         // assign the elasticsearch query object
-        const body = {
+        const esQuery = {
             from, // set the from parameter from the "limit", "page" params
             size, // set the size parameter from the "limit", "page" params
             _source: {
@@ -344,7 +333,7 @@ module.exports = (config) => {
 
         try {
             // get the search results from elasticsearch
-            const results = await es.search("oer_materials", body);
+            const results = await es.search("oer_materials", esQuery);
             // return res.json(results);
             // format the output before sending
             const output = results.hits.hits.map((hit) => materialFormat(hit, { wikipedia, wikipedia_limit }));
@@ -363,10 +352,10 @@ module.exports = (config) => {
 
             const BASE_URL = "https://platform.x5gon.org/api/v1/recommend/materials";
             // prepare the metadata used to navigate through the search
-            const total_hits = results.hits.total.value;
-            const total_pages = Math.ceil(results.hits.total.value / size);
-            const prev_page = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
-            const next_page = total_pages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
+            const totalHits = results.hits.total.value;
+            const totalPages = Math.ceil(results.hits.total.value / size);
+            const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
+            const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
             results.aggregations.providers.buckets.forEach((provider) => {
                 provider.key = provider.key.toLowerCase();
             });
@@ -376,10 +365,10 @@ module.exports = (config) => {
                 query: req.query,
                 rec_materials: output,
                 metadata: {
-                    total_hits,
-                    total_pages,
-                    prev_page,
-                    next_page,
+                    total_hits: totalHits,
+                    total_pages: totalPages,
+                    prev_page: prevPage,
+                    next_page: nextPage,
                     aggregations: {
                         licenses: results.aggregations.licenses.buckets,
                         types: results.aggregations.types.buckets,

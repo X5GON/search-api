@@ -27,7 +27,6 @@ function materialType(mimetype) {
     return null;
 }
 
-
 // merges all of the material information into a single line
 const pg_command = `
     WITH URLS AS (
@@ -157,7 +156,6 @@ async function populate() {
     // set the default disclaimer parameter
     const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
     const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
-
 
     let count = 0;
     const promise = new Promise((resolve, reject) => {
