@@ -1,11 +1,11 @@
 {
-  "name": "template-nodejs-elasticsearch-microservice",
+  "name": "x5gon-elasticsearch-microservice",
   "version": "1.0.0",
-  "description": "The template to the nodejs implementation of an elasticsearch microservice",
-  "main": "src/index.js",
+  "description": "The X5GON solution for finding OER materials quickly and efficiently",
+  "main": "dist/index.js",
   "scripts": {
     "build": "./node_modules/typescript/bin/tsc",
-    "start": "node src/index.js",
+    "start": "node dist/index.js",
     "development": "./node_modules/nodemon/bin/nodemon.js --config ./nodemon.json",
     "load:es": "node src/load/create-elasticsearch-index.js",
     "test": "echo \"Error: no test specified\" && exit 0",
@@ -14,12 +14,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ErikNovak/template-nodejs-elasticsearch-microservice.git"
+    "url": "git+https://github.com/ErikNovak/X5GON-elasticsearch-microservice.git"
   },
   "keywords": [
     "elasticsearch",
     "microservice",
-    "node.js"
+    "node.js",
+    "open educational resources"
   ],
   "author": "Erik Novak",
   "contributors": [
@@ -30,9 +31,9 @@
   ],
   "license": "BSD-2-Clause",
   "bugs": {
-    "url": "https://github.com/ErikNovak/template-nodejs-elasticsearch-microservice/issues"
+    "url": "https://github.com/ErikNovak/X5GON-elasticsearch-microservice/issues"
   },
-  "homepage": "https://github.com/ErikNovak/template-nodejs-elasticsearch-microservice#readme",
+  "homepage": "https://github.com/ErikNovak/X5GON-elasticsearch-microservice#readme",
   "dependencies": {
     "@elastic/elasticsearch": "^7.5.0",
     "archiver": "^3.1.1",
