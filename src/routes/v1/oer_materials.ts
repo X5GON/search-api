@@ -4,26 +4,27 @@
  * manipuating data from Elastic Search.
  */
 
-const router = require("express").Router();
-const { default: Elasticsearch } = require("../../library/elasticsearch");
-const { ErrorHandler } = require("../../library/error");
+import { IConfiguration, IElasticsearchHit, ISearch, IQueryElement } from "../../Interfaces";
 
-// internal modules
-const mimetypes = require("../../config/mimetypes");
 
+import { Router, Request, Response, NextFunction } from "express";
 // validating the query parameters
-const { query, body, param } = require("express-validator");
-
+import { query, param } from "express-validator";
 // creation of the query string to help the user navigate through
-const querystring = require("querystring");
+import * as querystring from "querystring";
+// add error handling functionality
+import { ErrorHandler } from "../../library/error";
+// import elasticsearch module
+import Elasticsearch from "../../library/elasticsearch";
+// import file mimetypes lists
+import * as mimetypes from "../../config/mimetypes.json";
 
-/**
- * Returns the general material type.
- * @param {String} mimetype - The document mimetype.
- * @returns {String|Null} The material type.
- */
-function materialType(mimetype) {
-    for (let type in mimetypes) {
+// initialize the express router
+const router = Router();
+
+// returns the general material type
+function materialType(mimetype: string) {
+    for (const type in mimetypes) {
         if (mimetypes[type].includes(mimetype)) {
             return type;
         }
@@ -31,7 +32,8 @@ function materialType(mimetype) {
     return null;
 }
 
-function materialFormat(hit, { wikipedia, wikipedia_limit }) {
+// format the material
+function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_limit?: number) {
     return {
         weight: hit._score,
         material_id: hit._source.material_id,
@@ -48,9 +50,9 @@ function materialFormat(hit, { wikipedia, wikipedia_limit }) {
         provider: {
             id: hit._source.provider_id,
             name: hit._source.provider_name.toLowerCase(),
-            domain: hit._source.provider_url,
+            domain: hit._source.provider_url
         },
-        content_ids: hit._source.contents ? hit._source.contents.map((content) => content.content_id) : [],
+        content_ids: hit._source.contents ? hit._source.contents.map(content => content.content_id) : [],
         ...wikipedia && {
             wikipedia: wikipedia_limit && wikipedia_limit > 0
                 ? hit._source.wikipedia.slice(0, wikipedia_limit)
@@ -59,12 +61,8 @@ function materialFormat(hit, { wikipedia, wikipedia_limit }) {
     };
 }
 
-/**
- * @description Assign the elasticsearch API routes.
- * @param {Object} config - The configuration object.
- * @returns {Object} The search router.
- */
-module.exports = (config) => {
+// assign the elasticsearch API routes
+export default (config: IConfiguration) => {
     // set the default parameters
     const DEFAULT_LIMIT = 20;
     const MAX_LIMIT = 100;
@@ -85,40 +83,39 @@ module.exports = (config) => {
     router.get("/oer_materials", [
         query("text").trim(),
         query("types").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase() : null)),
         query("licenses").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("languages").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("content_languages").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map(id => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
-        query("page").optional().toInt(),
-    ], async (req, res, next) => {
+        query("page").optional().toInt()
+    ], async (req: Request, res: Response, next: NextFunction) => {
         // extract the appropriate query parameters
-        let {
-            query: {
-                text,
-                types,
-                languages,
-                content_languages,
-                provider_ids,
-                licenses,
-                wikipedia,
-                wikipedia_limit,
-                limit,
-                page,
-            }
-        } = req;
+        const requestQuery: ISearch = req.query;
+        const {
+            text,
+            types,
+            languages,
+            content_languages,
+            provider_ids,
+            licenses,
+            wikipedia,
+            wikipedia_limit,
+            limit: queryLimit,
+            page: queryPage
+        } = requestQuery;
 
         if (!text) {
             return res.status(400).json({
                 message: "query parameter 'text' not available",
-                query: req.query
+                query: requestQuery
             });
         }
 
@@ -127,27 +124,34 @@ module.exports = (config) => {
         // ------------------------------------
 
         // set default pagination values
-        if (!limit) {
-            limit = DEFAULT_LIMIT;
-        } else if (limit <= 0) {
-            limit = DEFAULT_LIMIT;
-        } else if (limit >= MAX_LIMIT) {
-            limit = MAX_LIMIT;
-        }
+        // which part of the materials do we want to query
+        const limit: number = !queryLimit
+            ? DEFAULT_LIMIT
+            : queryLimit <= 0
+                ? DEFAULT_LIMIT
+                : queryLimit >= MAX_LIMIT
+                    ? DEFAULT_LIMIT
+                    : queryLimit;
+
+        const page: number = !queryPage
+            ? DEFAULT_PAGE
+            : queryPage;
+
+        const size = limit;
+        const from = (page - 1) * size;
+
         req.query.limit = limit;
-        if (!page) {
-            page = DEFAULT_PAGE;
-            req.query.page = page;
-        }
+        req.query.page = page;
 
         // ------------------------------------
         // Set query parameters
         // ------------------------------------
 
         // set the nested must conditions for the "contents" attribute
-        const nestedContentsMust = [{
+        const nestedContentsMust: IQueryElement[] = [{
             term: { "contents.extension": "plain" }
         }];
+
         if (content_languages) {
             nestedContentsMust.push({
                 terms: { "contents.language": content_languages }
@@ -159,16 +163,16 @@ module.exports = (config) => {
         // ------------------------------------
 
         // get the filter parameters (type and language)
-        let typegroup;
-        let filetypes;
+        let typegroup: string;
+        let filetypes: string;
         if (types && ["all", "text", "video", "audio"].includes(types)) {
             typegroup = types === "all" ? null : types;
         } else if (types && types.split(",").length > 0) {
-            filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
+            filetypes = types.split(",").map((t:string) => `.*\.${t.trim()}`).join("|");
         }
 
         // add the filter conditions for the regex
-        const filters = [];
+        const filters: IQueryElement[] = [];
         if (filetypes) {
             filters.push({
                 regexp: { material_url: filetypes }
@@ -205,17 +209,13 @@ module.exports = (config) => {
         }
 
         // check if we need to filter the documents
-        const filterFlag = filters.length;
-
-        // which part of the materials do we want to query
-        const size = limit;
-        const from = (page - 1) * size;
+        const filterFlag = filters.length > 0;
 
         // ------------------------------------
         // Translate the user input
         // ------------------------------------
 
-        let translation = text;
+        const translation = text;
 
         // ------------------------------------
         // Set the elasticsearch query body
@@ -253,7 +253,7 @@ module.exports = (config) => {
                             query: {
                                 bool: {
                                     must: [
-                                        { match: { "wikipedia.sec_name": translation } },
+                                        { match: { "wikipedia.sec_name": translation } }
                                     ]
                                 }
                             }
@@ -286,18 +286,20 @@ module.exports = (config) => {
             // get the search results from elasticsearch
             const results = await es.search("oer_materials", esQuery);
             // format the output before sending
-            const output = results.hits.hits.map((hit) => materialFormat(hit, { wikipedia, wikipedia_limit }));
+            const output = results.hits.hits.map((hit: IElasticsearchHit) =>
+                materialFormat(hit, wikipedia, wikipedia_limit)
+            );
 
             // prepare the parameters for the previous query
             const prevQuery = {
                 ...req.query,
-                ...page && { page: page - 1 },
+                ...page && { page: page - 1 }
             };
 
             // prepare the parameters for the next query
             const nextQuery = {
                 ...req.query,
-                ...page && { page: page + 1 },
+                ...page && { page: page + 1 }
             };
 
             const BASE_URL = "https://platform.x5gon.org/api/v1/search";
@@ -306,7 +308,7 @@ module.exports = (config) => {
             const totalPages = Math.ceil(results.hits.total.value / size);
             const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
             const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
-            results.aggregations.providers.buckets.forEach((provider) => {
+            results.aggregations.providers.buckets.forEach((provider: { key: string }) => {
                 provider.key = provider.key.toLowerCase();
             });
 
@@ -321,9 +323,9 @@ module.exports = (config) => {
                     next_page: nextPage,
                     aggregations: {
                         licenses: results.aggregations.licenses.buckets,
-                        types: results.aggregations.types.buckets,
                         languages: results.aggregations.languages.buckets,
-                        providers: results.aggregations.providers.buckets
+                        providers: results.aggregations.providers.buckets,
+                        types: results.aggregations.types.buckets
                     }
                 }
             });
@@ -338,7 +340,7 @@ module.exports = (config) => {
      * @apiName esSearchAPI
      * @apiGroup search
      */
-    router.post("/oer_materials", async (req, res, next) => {
+    router.post("/oer_materials", async (req: Request, res: Response, next: NextFunction) => {
         const {
             body: { record }
         } = req;
@@ -353,9 +355,9 @@ module.exports = (config) => {
 
             // modify the license attribute when sending to elasticsearch
             const url = record.license;
-            let shortName;
-            let typedName;
-            let disclaimer = DEFAULT_DISCLAIMER;
+            let shortName: string;
+            let typedName: string[];
+            const disclaimer = DEFAULT_DISCLAIMER;
 
             if (url) {
                 const regex = /\/licen[sc]es\/([\w\-]+)\//;
@@ -372,7 +374,7 @@ module.exports = (config) => {
             };
 
             // modify the wikipedia array
-            for (let value of record.wikipedia) {
+            for (const value of record.wikipedia) {
                 // rename the wikipedia concepts
                 value.sec_uri = value.secUri;
                 value.sec_name = value.secName;
@@ -394,20 +396,24 @@ module.exports = (config) => {
             // refresh the index after pushing the new record
             await es.refreshIndex("oer_materials");
             // return the material id of the added record
-            return res.status(200).json({ message: "record pushed to the index" });
+            return res.status(200).json({
+                message: "record pushed to the index",
+                material_id: record.material_id
+            });
         } catch (error) {
             return next(new ErrorHandler(500, "Internal server error"));
         }
     });
 
+    // get particular material
     router.get("/oer_materials/:material_id", [
         param("material_id").toInt(),
         query("wikipedia").optional().toBoolean(),
-        query("wikipedia_limit").optional().toInt(),
-    ], async (req, res, next) => {
+        query("wikipedia_limit").optional().toInt()
+    ], async (req: Request, res: Response, next: NextFunction) => {
         const {
             params: {
-                material_id
+                material_id: materialId
             },
             query: {
                 wikipedia,
@@ -415,19 +421,22 @@ module.exports = (config) => {
             }
         } = req;
 
-        if (!material_id) {
+        if (!materialId) {
             return res.status(400).json({
                 message: "body parameter material_id not an integer",
-                query: { material_id }
+                params: req.params,
+                query: req.query
             });
         }
 
         try {
             const results = await es.search("oer_materials", {
-                query: { terms: { _id: [material_id] } }
+                query: { terms: { _id: [materialId] } }
             });
             // format the output before sending
-            const output = results.hits.hits.map((hit) => materialFormat(hit, { wikipedia, wikipedia_limit }))[0];
+            const output = results.hits.hits.map((hit: IElasticsearchHit) =>
+                materialFormat(hit, wikipedia, wikipedia_limit)
+            )[0];
 
             // return the status as the response
             return res.status(200).json({
@@ -445,8 +454,8 @@ module.exports = (config) => {
      * @apiGroup search
      */
     router.patch("/oer_materials/:material_id", [
-        param("material_id").toInt(),
-    ], async (req, res, next) => {
+        param("material_id").toInt()
+    ], async (req: Request, res: Response, next: NextFunction) => {
         const {
             params: { material_id },
             body: { record }
@@ -461,7 +470,7 @@ module.exports = (config) => {
 
         try {
             // modify the wikipedia array
-            for (let value of record.wikipedia) {
+            for (const value of record.wikipedia) {
                 // rename the wikipedia concepts
                 value.sec_uri = value.secUri;
                 value.sec_name = value.secName;
@@ -497,7 +506,7 @@ module.exports = (config) => {
      */
     router.delete("/oer_materials/:material_id", [
         param("material_id").toInt()
-    ], async (req, res, next) => {
+    ], async (req: Request, res: Response, next: NextFunction) => {
         const {
             params: { material_id }
         } = req;

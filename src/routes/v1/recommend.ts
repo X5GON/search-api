@@ -4,59 +4,64 @@
  * manipuating data from Elastic Search.
  */
 
-const router = require("express").Router();
-const { default: Elasticsearch } = require("../../library/elasticsearch");
-const { ErrorHandler } = require("../../library/error");
+import {
+    IConfiguration,
+    IElasticsearchHit,
+    ISearch,
+    IQueryElement
+} from "../../Interfaces";
 
-// internal modules
-const mimetypes = require("../../config/mimetypes");
-
+import { Router, Request, Response, NextFunction } from "express";
 // validating the query parameters
-const { query, body, param } = require("express-validator");
-
+import { query } from "express-validator";
 // creation of the query string to help the user navigate through
-const querystring = require("querystring");
+import * as querystring from "querystring";
+// add error handling functionality
+import { ErrorHandler } from "../../library/error";
+// import elasticsearch module
+import Elasticsearch from "../../library/elasticsearch";
 
-/**
- * Returns the general material type.
- * @param {String} mimetype - The document mimetype.
- * @returns {String|Null} The material type.
- */
-function materialType(mimetype) {
-    for (let type in mimetypes) {
-        if (mimetypes[type].includes(mimetype)) {
-            return type;
-        }
-    }
-    return null;
-}
+// initialize the express router
+const router = Router();
 
-function materialFormat(hit, { wikipedia, wikipedia_limit }) {
+// format the material
+function materialFormat(
+    hit: IElasticsearchHit,
+    wikipedia?: boolean,
+    wikipedia_limit?: number
+) {
     return {
         weight: hit._score,
+        material_id: hit._source.material_id,
         title: hit._source.title,
         description: hit._source.description,
         creation_date: hit._source.creation_date,
         retrieved_date: hit._source.retrieved_date,
         type: hit._source.type,
         mimetype: hit._source.mimetype,
+        url: hit._source.material_url,
         website: hit._source.website_url,
         language: hit._source.language,
         license: hit._source.license,
         provider: {
             id: hit._source.provider_id,
             name: hit._source.provider_name.toLowerCase(),
-            domain: hit._source.provider_url,
-        }
+            domain: hit._source.provider_url
+        },
+        content_ids: hit._source.contents
+            ? hit._source.contents.map(content => content.content_id)
+            : [],
+        ...(wikipedia && {
+            wikipedia:
+                wikipedia_limit && wikipedia_limit > 0
+                    ? hit._source.wikipedia.slice(0, wikipedia_limit)
+                    : hit._source.wikipedia
+        })
     };
 }
 
-/**
- * @description Assign the elasticsearch API routes.
- * @param {Object} config - The configuration object.
- * @returns {Object} The search router.
- */
-module.exports = (config) => {
+// assign the recommendation API routes
+export default (config: IConfiguration) => {
     // set the default parameters
     const DEFAULT_LIMIT = 20;
     const MAX_LIMIT = 100;
@@ -65,60 +70,47 @@ module.exports = (config) => {
     // esablish connection with elasticsearch
     const es = new Elasticsearch(config.elasticsearch);
 
-    let setLanguages = [];
-    es.search("oer_materials", {
-        size: 0,
-        aggregations: {
-            languages: {
-                terms: { field: "language" }
-            },
-        }
-    }).then(({ aggregations }) => {
-        setLanguages = aggregations.languages.buckets
-            .map((obj) => obj.key);
-    });
-
     /**
      * @api {GET} /api/v1/oer_materials Search through the OER materials
      * @apiVersion 1.0.0
      * @apiName searchAPI
      * @apiGroup search
      */
+    // TODO: must specify the correct material type
     router.get("/recommend/bundles", [
         query("text").trim(),
         query("url").trim(),
         query("types").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase() : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase() : null)),
         query("licenses").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("languages").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("content_languages").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",") : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map(id => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
-        query("page").optional().toInt(),
-    ], async (req, res, next) => {
-
+        query("page").optional().toInt()
+    ], async (req: Request, res: Response, next: NextFunction) => {
         // extract the appropriate query parameters
-        let {
-            query: {
-                text,
-                url,
-                types,
-                languages,
-                content_languages,
-                provider_ids,
-                licenses,
-                wikipedia,
-                wikipedia_limit,
-                limit,
-                page,
-            }
-        } = req;
+        const requestQuery: ISearch = req.query;
+        // extract the appropriate query parameters
+        const {
+            text,
+            url,
+            types,
+            languages,
+            content_languages,
+            provider_ids,
+            licenses,
+            wikipedia,
+            wikipedia_limit,
+            limit: queryLimit,
+            page: queryPage
+        } = requestQuery;
 
         if (!text && !url) {
             return res.status(400).json({
@@ -138,9 +130,8 @@ module.exports = (config) => {
             }
         };
 
-        let wikiConcepts;
-        let materialURLs;
-        let preferedLangs;
+        let wikiConcepts: [string, number][];
+        let materialURLs: string[];
         try {
             // get the search results from elasticsearch
             const results = await es.search("oer_materials", materialQuery);
@@ -149,24 +140,23 @@ module.exports = (config) => {
                 return res.redirect(`/api/v1/oer_materials?${queryParams}`);
             }
 
-            const viewedMaterials = results.hits.hits;
-            const viewedLangauges = viewedMaterials.map((hit) => hit._source.language);
-            materialURLs = viewedMaterials.map((hit) => hit._source.material_url);
-            preferedLangs = setLanguages.filter((lang) => !viewedLangauges.includes(lang));
+            const viewedMaterials: IElasticsearchHit[] = results.hits.hits;
+            materialURLs = viewedMaterials.map(hit => hit._source.material_url);
             // return res.json(materialURLs);
-            wikiConcepts = viewedMaterials
-                .map((hit) => hit._source.wikipedia.slice(0, 30).map((wiki) => wiki.sec_name))
+            wikiConcepts = Object.entries(viewedMaterials
+                .map(hit => hit._source.wikipedia.slice(0, 30).map(wiki => wiki.sec_name))
                 .reduce((prev, curr) => prev.concat(curr), [])
                 .reduce((prev, curr) => {
                     if (!prev[curr]) {
-                        prev[curr] = 1;
+                        prev[curr] = 0;
                     }
                     prev[curr] += 1;
                     return prev;
-                }, {});
+                }, {}));
 
             const startSlice = wikiConcepts.length > 2 ? 2 : 0;
-            wikiConcepts = Object.entries(wikiConcepts).sort((a, b) => b[1] - a[1])
+            wikiConcepts = wikiConcepts
+                .sort((a, b) => b[1] - a[1])
                 .slice(startSlice, 20);
         } catch (error) {
             return next(new ErrorHandler(500, "Internal server error"));
@@ -177,27 +167,34 @@ module.exports = (config) => {
         // ------------------------------------
 
         // set default pagination values
-        if (!limit) {
-            limit = DEFAULT_LIMIT;
-        } else if (limit <= 0) {
-            limit = DEFAULT_LIMIT;
-        } else if (limit >= MAX_LIMIT) {
-            limit = MAX_LIMIT;
-        }
+        // which part of the materials do we want to query
+        const limit: number = !queryLimit
+            ? DEFAULT_LIMIT
+            : queryLimit <= 0
+                ? DEFAULT_LIMIT
+                : queryLimit >= MAX_LIMIT
+                    ? DEFAULT_LIMIT
+                    : queryLimit;
+
+        const page: number = !queryPage
+            ? DEFAULT_PAGE
+            : queryPage;
+
+        const size = limit;
+        const from = (page - 1) * size;
+
         req.query.limit = limit;
-        if (!page) {
-            page = DEFAULT_PAGE;
-            req.query.page = page;
-        }
+        req.query.page = page;
 
         // ------------------------------------
         // Set query parameters
         // ------------------------------------
 
         // set the nested must conditions for the "contents" attribute
-        const nestedContentsMust = [{
+        const nestedContentsMust: IQueryElement[] = [{
             term: { "contents.extension": "plain" }
         }];
+
         if (content_languages) {
             nestedContentsMust.push({
                 terms: { "contents.language": content_languages }
@@ -209,24 +206,27 @@ module.exports = (config) => {
         // ------------------------------------
 
         // get the filter parameters (type and language)
-        let typegroup;
-        let filetypes;
+        let typegroup: string;
+        let filetypes: string;
         if (types && ["all", "text", "video", "audio"].includes(types)) {
             typegroup = types === "all" ? null : types;
         } else if (types && types.split(",").length > 0) {
-            filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
+            filetypes = types
+                .split(",")
+                .map(t => `.*\.${t.trim()}`)
+                .join("|");
         }
 
         //  add the must not filter conditions
-        const filtersMustNot = [];
+        const filtersMustNot: IQueryElement[] = [];
         if (materialURLs) {
             filtersMustNot.push({
                 terms: { material_url: materialURLs }
-            })
+            });
         }
 
         // add the filter conditions for the regex
-        const filtersMust = [];
+        const filtersMust: IQueryElement[] = [];
         if (filetypes) {
             filtersMust.push({
                 regexp: { material_url: filetypes }
@@ -263,11 +263,7 @@ module.exports = (config) => {
         }
 
         // check if we need to filter the documents
-        const filterFlag = filtersMust.length || filtersMustNot.length;
-
-        // which part of the materials do we want to query
-        const size = limit;
-        const from = (page - 1) * size;
+        const filterFlag = filtersMust.length > 0 || filtersMustNot.length > 0;
 
         // ------------------------------------
         // Set the elasticsearch query body
@@ -287,7 +283,7 @@ module.exports = (config) => {
             },
             query: {
                 bool: {
-                    should: wikiConcepts.map((wiki) => ({
+                    should: wikiConcepts.map(wiki => ({
                         nested: {
                             path: "wikipedia",
                             query: {
@@ -296,18 +292,18 @@ module.exports = (config) => {
                                         query: wiki[0],
                                         boost: wiki[1] / materialURLs.length
                                     }
-                                },
+                                }
                             }
                         }
                     })),
-                    ...filterFlag && {
+                    ...(filterFlag && {
                         filter: {
                             bool: {
-                                ...filtersMust && { must: filtersMust },
-                                ...filtersMustNot && { must_not: filtersMustNot }
+                                ...(filtersMust && { must: filtersMust }),
+                                ...(filtersMustNot && { must_not: filtersMustNot })
                             }
                         }
-                    }
+                    })
                 }
             },
             collapse: {
@@ -336,27 +332,36 @@ module.exports = (config) => {
             const results = await es.search("oer_materials", esQuery);
             // return res.json(results);
             // format the output before sending
-            const output = results.hits.hits.map((hit) => materialFormat(hit, { wikipedia, wikipedia_limit }));
+            const output = results.hits.hits.map((hit: IElasticsearchHit) =>
+                materialFormat(hit, wikipedia, wikipedia_limit)
+            );
 
             // prepare the parameters for the previous query
             const prevQuery = {
                 ...req.query,
-                ...page && { page: page - 1 },
+                ...(page && { page: page - 1 })
             };
 
             // prepare the parameters for the next query
             const nextQuery = {
                 ...req.query,
-                ...page && { page: page + 1 },
+                ...(page && { page: page + 1 })
             };
 
-            const BASE_URL = "https://platform.x5gon.org/api/v1/recommend/materials";
+            const BASE_URL =
+                "https://platform.x5gon.org/api/v1/recommend/materials";
             // prepare the metadata used to navigate through the search
             const totalHits = results.hits.total.value;
             const totalPages = Math.ceil(results.hits.total.value / size);
-            const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
-            const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
-            results.aggregations.providers.buckets.forEach((provider) => {
+            const prevPage =
+                page - 1 > 0
+                    ? `${BASE_URL}?${querystring.stringify(prevQuery)}`
+                    : null;
+            const nextPage =
+                totalPages >= page + 1
+                    ? `${BASE_URL}?${querystring.stringify(nextQuery)}`
+                    : null;
+            results.aggregations.providers.buckets.forEach(provider => {
                 provider.key = provider.key.toLowerCase();
             });
 
@@ -380,7 +385,8 @@ module.exports = (config) => {
         } catch (error) {
             return next(new ErrorHandler(500, "Internal server error"));
         }
-    });
+    }
+    );
 
     // return the router
     return router;

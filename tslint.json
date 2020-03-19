@@ -19,9 +19,8 @@
     },
     "linterOptions": {
       "exclude": [
-        "public/**/*.js",
-        "config/**/*.js",
-        "node_modules/**/*.ts"
+        "node_modules/**/*.ts",
+        "src/load/*.js"
       ]
     }
   }

@@ -28,7 +28,7 @@ function materialType(mimetype) {
 }
 
 // merges all of the material information into a single line
-const pg_command = `
+const pgCommand = `
     WITH URLS AS (
         SELECT
             COALESCE(m.material_id, c.material_id) AS material_id,
@@ -162,7 +162,7 @@ async function populate() {
 
         console.log("executing pg-command");
 
-        pg.executeLarge(pg_command, [], 100,
+        pg.executeLarge(pgCommand, [], 100,
             (error, records, callback) => {
                 if (error) { console.log(error); return; }
 
@@ -179,26 +179,26 @@ async function populate() {
 
                     // modify the license attribute when sending to elasticsearch
                     const url = record.license;
-                    let short_name;
-                    let typed_name;
+                    let shortName;
+                    let typedName;
                     let disclaimer = DEFAULT_DISCLAIMER;
 
                     if (url) {
                         const regex = /\/licen[sc]es\/([\w\-]+)\//;
-                        short_name = url.match(regex)[1];
-                        typed_name = short_name.split("-");
+                        shortName = url.match(regex)[1];
+                        typedName = shortName.split("-");
                     } else {
-                        short_name = NO_LICENSE_DISCLAIMER;
+                        shortName = NO_LICENSE_DISCLAIMER;
                     }
                     record.license = {
-                        short_name,
-                        typed_name,
+                        short_name: shortName,
+                        typed_name: typedName,
                         disclaimer,
                         url
                     };
 
                     // modify the wikipedia array
-                    for (let value of record.wikipedia) {
+                    for (const value of record.wikipedia) {
                         // rename the wikipedia concepts
                         value.sec_uri = value.secUri;
                         value.sec_name = value.secName;
@@ -221,7 +221,7 @@ async function populate() {
                                 count++;
                                 xcallback(null);
                             })
-                            .catch((error) => xcallback);
+                            .catch(xcallback);
                     });
                 }
 
