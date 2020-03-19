@@ -106,7 +106,7 @@ export function createDirectoryPath(dirPath: string) {
     const directories = resolvedPath.split(/[\/\\]/g);
     let currentDir = directories[0].length ? directories[0] : "/";
     // add and create directories in path
-    for (const i = 1; i < directories.length; i++) {
+    for (let i = 1; i < directories.length; i++) {
         currentDir = path.join(currentDir, directories[i]);
         createFolder(currentDir);
     }
