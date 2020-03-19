@@ -1,6 +1,7 @@
 # NodeJS Elasticsearch Microservice
 
 [![Build Status](https://travis-ci.com/ErikNovak/template-nodejs-elasticsearch-microservice.svg?branch=master)](https://travis-ci.com/ErikNovak/template-nodejs-elasticsearch-microservice)
+![Node.js CI](https://github.com/ErikNovak/X5GON-elasticsearch-microservice/workflows/Node.js%20CI/badge.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D%2010.0.0-green.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-green.svg)
 [![License](https://img.shields.io/badge/License-BSD%202--Clause-green.svg)](https://opensource.org/licenses/BSD-2-Clause)
