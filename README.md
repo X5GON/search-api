@@ -23,6 +23,18 @@ npm install
 
 ## Starting the Microservice
 To start the microservice in development mode run the following command
-```bash
-npm start
-```
+
+1. Build the project with the following command
+    ```bash
+    npm run build 
+    ```
+    This will build the typescript code and copy it into the `/dist` folder
+
+2. Configure the `.env` file in the `/dist/config` folder as described [here](./src/config/README.md).
+3. Start the project by running 
+    ```bash
+    npm start
+    ```
+    
+
+
