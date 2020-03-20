@@ -168,7 +168,7 @@ export default (config: IConfiguration) => {
         if (types && ["all", "text", "video", "audio"].includes(types)) {
             typegroup = types === "all" ? null : types;
         } else if (types && types.split(",").length > 0) {
-            filetypes = types.split(",").map((t:string) => `.*\.${t.trim()}`).join("|");
+            filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
         }
 
         // add the filter conditions for the regex
