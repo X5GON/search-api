@@ -27,13 +27,13 @@ app.use(bodyParser.urlencoded({              // to support URL-encoded bodies
 app.use(cookieParser(config.sessionsecret));
 
 // add session configurations
-if (config.environment === "production") {
+if (config.isProduction) {
     app.set("trust proxy", 1);
 }
 app.use(logging(
     "elasticsearch",
     "info",
-    config.environment !== "production"
+    !config.isProduction
 ));
 
 // set the API routes of all supported version

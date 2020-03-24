@@ -18,7 +18,8 @@ const env = process.env.NODE_ENV || "development";
 
 // the common environment
 const common = {
-    environment: env
+    environment: env,
+    isProduction: env === "production"
     // TODO: add common variables
 };
 

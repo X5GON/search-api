@@ -3,6 +3,7 @@
 
 export interface IConfigCommon {
     environment: string,
+    isProduction: boolean
 }
 
 export interface IConfigENV {
@@ -15,6 +16,7 @@ export interface IConfigENV {
 
 export interface IConfiguration {
     environment?: string,
+    isProduction?: boolean,
     port: number,
     sessionsecret?: string,
     elasticsearch: {
