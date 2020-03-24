@@ -11,7 +11,7 @@ import { IConfigCommon, IConfigENV, IConfiguration } from "../Interfaces";
 import * as path from "path";
 // import the secret node variables
 import * as dotenv from "dotenv";
-dotenv.config({ path: path.resolve(__dirname, ".env") });
+dotenv.config({ path: path.resolve(__dirname, "../../env/.env") });
 
 // get process environment
 const env = process.env.NODE_ENV || "development";
