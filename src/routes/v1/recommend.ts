@@ -49,7 +49,7 @@ function materialFormat(
             domain: hit._source.provider_url
         },
         content_ids: hit._source.contents
-            ? hit._source.contents.map(content => content.content_id)
+            ? hit._source.contents.map((content) => content.content_id)
             : [],
         ...(wikipedia && {
             wikipedia:
@@ -89,7 +89,7 @@ export default (config: IConfiguration) => {
         query("content_languages").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map(id => parseInt(id, 10)) : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
@@ -141,10 +141,10 @@ export default (config: IConfiguration) => {
             }
 
             const viewedMaterials: IElasticsearchHit[] = results.hits.hits;
-            materialURLs = viewedMaterials.map(hit => hit._source.material_url);
+            materialURLs = viewedMaterials.map((hit) => hit._source.material_url);
             // return res.json(materialURLs);
             wikiConcepts = Object.entries(viewedMaterials
-                .map(hit => hit._source.wikipedia.slice(0, 30).map(wiki => wiki.sec_name))
+                .map((hit) => hit._source.wikipedia.slice(0, 30).map((wiki) => wiki.sec_name))
                 .reduce((prev, curr) => prev.concat(curr), [])
                 .reduce((prev, curr) => {
                     if (!prev[curr]) {
@@ -213,7 +213,7 @@ export default (config: IConfiguration) => {
         } else if (types && types.split(",").length > 0) {
             filetypes = types
                 .split(",")
-                .map(t => `.*\.${t.trim()}`)
+                .map((t) => `.*\.${t.trim()}`)
                 .join("|");
         }
 
@@ -283,7 +283,7 @@ export default (config: IConfiguration) => {
             },
             query: {
                 bool: {
-                    should: wikiConcepts.map(wiki => ({
+                    should: wikiConcepts.map((wiki) => ({
                         nested: {
                             path: "wikipedia",
                             query: {
@@ -361,7 +361,7 @@ export default (config: IConfiguration) => {
                 totalPages >= page + 1
                     ? `${BASE_URL}?${querystring.stringify(nextQuery)}`
                     : null;
-            results.aggregations.providers.buckets.forEach(provider => {
+            results.aggregations.providers.buckets.forEach((provider) => {
                 provider.key = provider.key.toLowerCase();
             });
 

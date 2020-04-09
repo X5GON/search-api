@@ -1,17 +1,18 @@
-require("module-alias/register");
+/* eslint-disable linebreak-style */
 
-// async values handler
+// modules
 const async = require("async");
+// eslint-disable-next-line linebreak-style
+const { default: PostgreSQL } = require("../dist/library/postgresQL");
+const { default: ElasticSearch } = require("../src/library/elasticsearch");
 
-// import configurations
-const config = require("@config/config");
-const pg = require("@library/postgresQL")(config.pg);
-const ElasticSearch = require("../library/elasticsearch");
+// configurations
+const { default: config } = require("../dist/config/config");
+const mimetypes = require("../dist/config/mimetypes");
 
+// initialize
+const pg = new PostgreSQL(config.pg);
 const es = new ElasticSearch({ node: "http://127.0.0.1:9200" });
-
-// internal modules
-const mimetypes = require("@config/mimetypes");
 
 /**
  * Returns the general material type.
@@ -84,6 +85,7 @@ const pgCommand = `
     WHERE fp.table_name='oer_materials' AND fp.name='wikipedia_concepts'
     ORDER BY OERS.material_id DESC;
 `;
+
 console.log("preparation");
 async function populate() {
     console.log("deleting index");
@@ -159,7 +161,6 @@ async function populate() {
 
     let count = 0;
     const promise = new Promise((resolve, reject) => {
-
         console.log("executing pg-command");
 
         pg.executeLarge(pgCommand, [], 100,
@@ -217,10 +218,7 @@ async function populate() {
 
                     tasks.push((xcallback) => {
                         es.pushRecord("oer_materials", record, record.material_id)
-                            .then((results) => {
-                                count++;
-                                xcallback(null);
-                            })
+                            .then((results) => { count++; xcallback(null); })
                             .catch(xcallback);
                     });
                 }
@@ -232,12 +230,13 @@ async function populate() {
                     }
                     callback();
                 });
-            }, (error) => {
+            }, async (error) => {
                 // close connection
-                pg.close();
-                if (error) { return reject(error); }
-                // close the postgres connection
-                return resolve();
+                pg.close().then(() => {
+                    if (error) { return reject(error); }
+                    // close the postgres connection
+                    return resolve();
+                });
             });
     });
 

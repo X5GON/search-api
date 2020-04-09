@@ -52,7 +52,7 @@ function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_l
             name: hit._source.provider_name.toLowerCase(),
             domain: hit._source.provider_url
         },
-        content_ids: hit._source.contents ? hit._source.contents.map(content => content.content_id) : [],
+        content_ids: hit._source.contents ? hit._source.contents.map((content) => content.content_id) : [],
         ...wikipedia && {
             wikipedia: wikipedia_limit && wikipedia_limit > 0
                 ? hit._source.wikipedia.slice(0, wikipedia_limit)
@@ -91,7 +91,7 @@ export default (config: IConfiguration) => {
         query("content_languages").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("provider_ids").optional().trim()
-            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map(id => parseInt(id, 10)) : null)),
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
         query("limit").optional().toInt(),
@@ -168,7 +168,7 @@ export default (config: IConfiguration) => {
         if (types && ["all", "text", "video", "audio"].includes(types)) {
             typegroup = types === "all" ? null : types;
         } else if (types && types.split(",").length > 0) {
-            filetypes = types.split(",").map(t => `.*\.${t.trim()}`).join("|");
+            filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
         }
 
         // add the filter conditions for the regex

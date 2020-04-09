@@ -5,7 +5,7 @@
  * variables.
  */
 
-import { IConfigCommon, IConfigENV, IConfiguration } from "../Interfaces";
+import * as Interfaces from "../Interfaces";
 
 // external modules
 import * as path from "path";
@@ -59,8 +59,8 @@ const envGroups = {
     test
 };
 
-// Creates a deep merge between two JSON objects.
-function merge(target: IConfigCommon, source: IConfigENV): IConfiguration {
+// creates a deep merge between two JSON objects
+function merge(target: Interfaces.IConfigCommon, source: Interfaces.IConfigENV): Interfaces.IConfiguration {
     // Iterate through `source` properties
     // If an `Object` set property to merge of `target` and `source` properties
     for (const key of Object.keys(source)) {

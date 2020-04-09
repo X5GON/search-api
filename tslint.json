@@ -1,13 +1,13 @@
 {
     "extends": ["tslint:recommended"],
     "rules": {
-      "no-console": [ "log" ],
+      "no-console": ["log"],
       "ordered-imports": false,
       "triple-equals": false,
       "no-namespace": false,
       "max-classes-per-file": [false, 20],
       "no-consecutive-blank-lines": false,
-      "arrow-parens": [true, "ban-single-arg-parens"],
+      "arrow-parens": [true],
       "trailing-comma": [true, {"multiline": "never", "singleline": "never"}],
       "variable-name": [
         true,
