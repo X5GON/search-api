@@ -6,7 +6,7 @@
 ![Platform](https://img.shields.io/badge/platform-linux-green.svg)
 [![License](https://img.shields.io/badge/License-BSD%202--Clause-green.svg)](https://opensource.org/licenses/BSD-2-Clause)
 
-The template repository for setting up the NodeJS microservice for connecting and using [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html).
+The repository for setting up the NodeJS microservice for connecting and using [Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html).
 
 ## Prerequisites
 - A running Elasticsearch service (one can download and install it from [here](https://www.elastic.co/downloads/elasticsearch))
