@@ -70,14 +70,8 @@ export default (config: IConfiguration) => {
     // esablish connection with elasticsearch
     const es = new Elasticsearch(config.elasticsearch);
 
-    /**
-     * @api {GET} /api/v1/oer_materials Search through the OER materials
-     * @apiVersion 1.0.0
-     * @apiName searchAPI
-     * @apiGroup search
-     */
     // TODO: must specify the correct material type
-    router.get("/recommend/bundles", [
+    router.get("/recommend/oer_bundles", [
         query("text").trim(),
         query("url").trim(),
         query("types").optional().trim()
@@ -142,7 +136,7 @@ export default (config: IConfiguration) => {
 
             const viewedMaterials: IElasticsearchHit[] = results.hits.hits;
             materialURLs = viewedMaterials.map((hit) => hit._source.material_url);
-            // return res.json(materialURLs);
+
             wikiConcepts = Object.entries(viewedMaterials
                 .map((hit) => hit._source.wikipedia.slice(0, 30).map((wiki) => wiki.sec_name))
                 .reduce((prev, curr) => prev.concat(curr), [])
@@ -153,7 +147,8 @@ export default (config: IConfiguration) => {
                     prev[curr] += 1;
                     return prev;
                 }, {}));
-
+            // start slice removes the two most frequent wikipedia
+            // concepts to avoid too broad concepts
             const startSlice = wikiConcepts.length > 2 ? 2 : 0;
             wikiConcepts = wikiConcepts
                 .sort((a, b) => b[1] - a[1])
@@ -349,7 +344,7 @@ export default (config: IConfiguration) => {
             };
 
             const BASE_URL =
-                "https://platform.x5gon.org/api/v1/recommend/materials";
+                "https://platform.x5gon.org/api/v1/recommend/oer_bundles";
             // prepare the metadata used to navigate through the search
             const totalHits = results.hits.total.value;
             const totalPages = Math.ceil(results.hits.total.value / size);
