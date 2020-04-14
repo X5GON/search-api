@@ -28,7 +28,9 @@ const router = Router();
 function materialFormat(
     hit: IElasticsearchHit,
     wikipedia?: boolean,
-    wikipedia_limit?: number
+    wikipedia_limit?: number,
+    get_content?: boolean,
+    content_extension?: string
 ) {
     return {
         weight: hit._score,
@@ -51,6 +53,9 @@ function materialFormat(
         content_ids: hit._source.contents
             ? hit._source.contents.map((content) => content.content_id)
             : [],
+        ... get_content && {
+            contents: hit._source.contents.filter((content) => content.extension === content_extension)
+        },
         ...(wikipedia && {
             wikipedia:
                 wikipedia_limit && wikipedia_limit > 0
@@ -82,6 +87,8 @@ export default (config: IConfiguration) => {
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("content_languages").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
+        query("content_extension").optional().trim()
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase() : null)),
         query("provider_ids").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
@@ -98,6 +105,7 @@ export default (config: IConfiguration) => {
             types,
             languages,
             content_languages,
+            content_extension,
             provider_ids,
             licenses,
             wikipedia,
@@ -184,13 +192,24 @@ export default (config: IConfiguration) => {
         // ------------------------------------
 
         // set the nested must conditions for the "contents" attribute
-        const nestedContentsMust: IQueryElement[] = [{
-            term: { "contents.extension": "plain" }
-        }];
+        const nestedContentsMust: IQueryElement[] = [];
 
         if (content_languages) {
             nestedContentsMust.push({
                 terms: { "contents.language": content_languages }
+            });
+        }
+
+        // get the content values
+        let getContent: boolean;
+        if (content_extension && ["plain", "webvtt", "dfxp"].includes(content_extension)) {
+            getContent = true;
+            nestedContentsMust.push({
+                term: { "contents.extension": content_extension }
+            });
+        } else {
+            nestedContentsMust.push({
+                term: { "contents.extension": "plain" }
             });
         }
 
@@ -267,15 +286,29 @@ export default (config: IConfiguration) => {
             from, // set the from parameter from the "limit", "page" params
             size, // set the size parameter from the "limit", "page" params
             _source: {
-                excludes: [
-                    "contents.type",
-                    "contents.extension",
-                    "contents.language",
-                    "contents.value"
-                ]
+                ...!getContent && {
+                    excludes: [
+                        "contents.type",
+                        "contents.extension",
+                        "contents.language",
+                        "contents.value"
+                    ]
+                }
             },
             query: {
                 bool: {
+                    ...getContent && {
+                        must: [{
+                            nested: {
+                                path: "contents",
+                                query: {
+                                    bool: {
+                                        must: nestedContentsMust
+                                    }
+                                }
+                            }
+                        }]
+                    },
                     should: wikiConcepts.map((wiki) => ({
                         nested: {
                             path: "wikipedia",
@@ -326,7 +359,7 @@ export default (config: IConfiguration) => {
             // return res.json(results);
             // format the output before sending
             const output = results.hits.hits.map((hit: IElasticsearchHit) =>
-                materialFormat(hit, wikipedia, wikipedia_limit)
+                materialFormat(hit, wikipedia, wikipedia_limit, getContent, content_extension)
             );
 
             // prepare the parameters for the previous query

@@ -33,7 +33,7 @@ function materialType(mimetype: string) {
 }
 
 // format the material
-function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_limit?: number) {
+function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_limit?: number, getContent?: boolean, content_extension?: string) {
     return {
         weight: hit._score,
         material_id: hit._source.material_id,
@@ -53,6 +53,9 @@ function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_l
             domain: hit._source.provider_url
         },
         content_ids: hit._source.contents ? hit._source.contents.map((content) => content.content_id) : [],
+        ... getContent && {
+            contents: hit._source.contents.filter((content) => content.extension === content_extension)
+        },
         ...wikipedia && {
             wikipedia: wikipedia_limit && wikipedia_limit > 0
                 ? hit._source.wikipedia.slice(0, wikipedia_limit)
@@ -90,6 +93,8 @@ export default (config: IConfiguration) => {
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
         query("content_languages").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",") : null)),
+        query("content_extension").optional().trim()
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase() : null)),
         query("provider_ids").optional().trim()
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
@@ -104,6 +109,7 @@ export default (config: IConfiguration) => {
             types,
             languages,
             content_languages,
+            content_extension,
             provider_ids,
             licenses,
             wikipedia,
@@ -148,13 +154,24 @@ export default (config: IConfiguration) => {
         // ------------------------------------
 
         // set the nested must conditions for the "contents" attribute
-        const nestedContentsMust: IQueryElement[] = [{
-            term: { "contents.extension": "plain" }
-        }];
+        const nestedContentsMust: IQueryElement[] = [];
 
         if (content_languages) {
             nestedContentsMust.push({
                 terms: { "contents.language": content_languages }
+            });
+        }
+
+        // get the content values
+        let getContent: boolean;
+        if (content_extension && ["plain", "webvtt", "dfxp"].includes(content_extension)) {
+            getContent = true;
+            nestedContentsMust.push({
+                term: { "contents.extension": content_extension }
+            });
+        } else {
+            nestedContentsMust.push({
+                term: { "contents.extension": "plain" }
             });
         }
 
@@ -226,15 +243,29 @@ export default (config: IConfiguration) => {
             from, // set the from parameter from the "limit", "page" params
             size, // set the size parameter from the "limit", "page" params
             _source: {
-                excludes: [
-                    "contents.type",
-                    "contents.extension",
-                    "contents.language",
-                    "contents.value"
-                ]
+                ...!getContent && {
+                    excludes: [
+                        "contents.type",
+                        "contents.extension",
+                        "contents.language",
+                        "contents.value"
+                    ]
+                }
             },
             query: {
                 bool: {
+                    ...getContent && {
+                        must: [{
+                            nested: {
+                                path: "contents",
+                                query: {
+                                    bool: {
+                                        must: nestedContentsMust
+                                    }
+                                }
+                            }
+                        }]
+                    },
                     should: [{
                         match: { title: text }
                     }, {
@@ -242,8 +273,7 @@ export default (config: IConfiguration) => {
                             path: "contents",
                             query: {
                                 bool: {
-                                    should: { match: { "contents.value": text } },
-                                    must: nestedContentsMust
+                                    should: { match: { "contents.value": text } }
                                 }
                             }
                         }
@@ -287,7 +317,7 @@ export default (config: IConfiguration) => {
             const results = await es.search("oer_materials", esQuery);
             // format the output before sending
             const output = results.hits.hits.map((hit: IElasticsearchHit) =>
-                materialFormat(hit, wikipedia, wikipedia_limit)
+                materialFormat(hit, wikipedia, wikipedia_limit, getContent, content_extension)
             );
 
             // prepare the parameters for the previous query

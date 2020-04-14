@@ -34,7 +34,11 @@ export interface IConfiguration {
 /////////////////////////////////////////////////////////////////////
 
 export interface IContent {
-    content_id: number
+    content_id: number,
+    type: string,
+    extension: string,
+    language: string,
+    value: string
 }
 
 export interface IWikipedia {
@@ -96,10 +100,11 @@ export interface ISearch {
     text?: string,
     url?: string,
     types?: string,
-    licenses?: string,
-    languages?: string,
-    content_languages?: string,
-    provider_ids?: string,
+    licenses?: string[],
+    languages?: string[],
+    content_languages?: string[],
+    content_extension?: string,
+    provider_ids?: string[],
     wikipedia?: boolean,
     wikipedia_limit?: number,
     limit?: number,
