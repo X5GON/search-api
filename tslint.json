@@ -5,6 +5,7 @@
       "ordered-imports": false,
       "triple-equals": false,
       "no-namespace": false,
+      "no-var-requires": false,
       "max-classes-per-file": [false, 20],
       "no-consecutive-blank-lines": false,
       "arrow-parens": [true],
