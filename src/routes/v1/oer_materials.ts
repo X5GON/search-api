@@ -18,6 +18,8 @@ import { ErrorHandler } from "../../library/error";
 import Elasticsearch from "../../library/elasticsearch";
 // import file mimetypes lists
 import * as mimetypes from "../../config/mimetypes.json";
+// conversion of language iso codes
+const ISO6391 = require("iso-639-1");
 
 // initialize the express router
 const router = Router();
@@ -46,6 +48,7 @@ function materialFormat(hit: IElasticsearchHit, wikipedia?: boolean, wikipedia_l
         url: hit._source.material_url,
         website: hit._source.website_url,
         language: hit._source.language,
+        language_full: ISO6391.getName(hit._source.language),
         license: hit._source.license,
         provider: {
             id: hit._source.provider_id,

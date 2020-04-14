@@ -20,6 +20,8 @@ import * as querystring from "querystring";
 import { ErrorHandler } from "../../library/error";
 // import elasticsearch module
 import Elasticsearch from "../../library/elasticsearch";
+// conversion of language iso codes
+const ISO6391 = require('iso-639-1');
 
 // initialize the express router
 const router = Router();
@@ -44,6 +46,7 @@ function materialFormat(
         url: hit._source.material_url,
         website: hit._source.website_url,
         language: hit._source.language,
+        language_full: ISO6391.getName(hit._source.language),
         license: hit._source.license,
         provider: {
             id: hit._source.provider_id,
