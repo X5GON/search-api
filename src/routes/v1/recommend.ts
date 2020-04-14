@@ -147,12 +147,10 @@ export default (config: IConfiguration) => {
                     prev[curr] += 1;
                     return prev;
                 }, {}));
-            // start slice removes the two most frequent wikipedia
-            // concepts to avoid too broad concepts
-            const startSlice = wikiConcepts.length > 2 ? 2 : 0;
+
             wikiConcepts = wikiConcepts
                 .sort((a, b) => b[1] - a[1])
-                .slice(startSlice, 20);
+                .slice(0, 30);
         } catch (error) {
             return next(new ErrorHandler(500, "Internal server error"));
         }
