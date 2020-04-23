@@ -16,6 +16,8 @@ import * as querystring from "querystring";
 import { ErrorHandler } from "../../library/error";
 // import elasticsearch module
 import Elasticsearch from "../../library/elasticsearch";
+// import bent for making requests
+import * as bent from "bent";
 // import file mimetypes lists
 import * as mimetypes from "../../config/mimetypes.json";
 // conversion of language iso codes
@@ -77,8 +79,59 @@ export default (config: IConfiguration) => {
     const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
     const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
 
-    // esablish connection with elasticsearch
+    const BASE_URL = "https://platform.x5gon.org/api/v1/search";
+    // establish connection with elasticsearch
     const es = new Elasticsearch(config.elasticsearch);
+
+    // prepare API request to retrieve image metadata from Creative Commons Search
+    const ccSearch = bent("GET", "https://api.creativecommons.engineering", "json", 200, { "Authorization": `bearer ${config.creativecommons.token}` });
+
+    // get the images from creative commons search
+    async function fetchImages(text: string, limit: number, page: number, licenses: string[]) {
+        // prepare query for CC search
+        const queryObject = {
+            q: text,
+            ...licenses && { licenses },
+            page_size: limit,
+            page
+        };
+        const queryString = querystring.stringify(queryObject);
+        // make request to ccSearch
+        const response = await ccSearch(`/v1/images?${queryString}`);
+        // return the formatted response
+        return response;
+    }
+
+    // formats the license
+    function formatLicense(license: string) {
+        // modify the license attribute when sending to elasticsearch
+        const disclaimer = DEFAULT_DISCLAIMER;
+        const regex = /\/licen[sc]es\/([\w\-]+)\//;
+        const shortName = license.match(regex)[1];
+        const typedName = shortName.split("-");
+        return {
+            short_name: shortName,
+            typed_name: typedName,
+            disclaimer,
+            url: license
+        };
+    }
+
+    function imageFormat(image: any) {
+        return {
+            image_id: image.id,
+            title: image.title,
+            source: image.source,
+            creator: image.creator,
+            creator_url: image.creator_url,
+            license: formatLicense(image.license_url),
+            material_url: image.url,
+            website: image.foreign_landing_url,
+            height: image.height,
+            width: image.width,
+            cc_metadata_url: `https://search.creativecommons.org/photos/${image.id}`
+        }
+    }
 
     /**
      * @api {GET} /api/v1/oer_materials Search through the OER materials
@@ -185,7 +238,7 @@ export default (config: IConfiguration) => {
         // get the filter parameters (type and language)
         let typegroup: string;
         let filetypes: string;
-        if (types && ["all", "text", "video", "audio"].includes(types)) {
+        if (types && ["all", "text", "video", "audio", "image"].includes(types)) {
             typegroup = types === "all" ? null : types;
         } else if (types && types.split(",").length > 0) {
             filetypes = types.split(",").map((t) => `.*\.${t.trim()}`).join("|");
@@ -238,133 +291,161 @@ export default (config: IConfiguration) => {
         const translation = text;
 
         // ------------------------------------
-        // Set the elasticsearch query body
+        // Check if the request is for images
         // ------------------------------------
 
-        // assign the elasticsearch query object
-        const esQuery = {
-            from, // set the from parameter from the "limit", "page" params
-            size, // set the size parameter from the "limit", "page" params
-            _source: {
-                ...!getContent && {
-                    excludes: [
-                        "contents.type",
-                        "contents.extension",
-                        "contents.language",
-                        "contents.value"
-                    ]
-                }
-            },
-            query: {
-                bool: {
-                    ...getContent && {
-                        must: [{
+        let totalHits: number;
+        let totalPages: number;
+        let results: any;
+        let aggregations: any;
+
+        if (typegroup === "image") {
+            // make a request to the creative commons search API
+            try {
+                const output = await fetchImages(text, limit, page, licenses);
+                // get the total number of results
+                totalHits = output.result_count;
+                totalPages = output.page_count;
+                // format the image results
+                results = output.results.map((r) => imageFormat(r));
+
+            } catch (error) {
+                return next(new ErrorHandler(500, "Internal server error"));
+            }
+        } else {
+
+            // ------------------------------------
+            // Set the elasticsearch query body
+            // ------------------------------------
+
+            // assign the elasticsearch query object
+            const esQuery = {
+                from, // set the from parameter from the "limit", "page" params
+                size, // set the size parameter from the "limit", "page" params
+                _source: {
+                    ...!getContent && {
+                        excludes: [
+                            "contents.type",
+                            "contents.extension",
+                            "contents.language",
+                            "contents.value"
+                        ]
+                    }
+                },
+                query: {
+                    bool: {
+                        ...getContent && {
+                            must: [{
+                                nested: {
+                                    path: "contents",
+                                    query: {
+                                        bool: {
+                                            must: nestedContentsMust
+                                        }
+                                    }
+                                }
+                            }]
+                        },
+                        should: [{
+                            match: { title: text }
+                        }, {
                             nested: {
                                 path: "contents",
                                 query: {
                                     bool: {
-                                        must: nestedContentsMust
+                                        should: { match: { "contents.value": text } }
                                     }
                                 }
                             }
-                        }]
-                    },
-                    should: [{
-                        match: { title: text }
-                    }, {
-                        nested: {
-                            path: "contents",
-                            query: {
-                                bool: {
-                                    should: { match: { "contents.value": text } }
+                        }, {
+                            nested: {
+                                path: "wikipedia",
+                                query: {
+                                    bool: {
+                                        must: [
+                                            { match: { "wikipedia.sec_name": translation } }
+                                        ]
+                                    }
                                 }
                             }
+                        }],
+                        ...filterFlag && {
+                            filter: filters
                         }
-                    }, {
-                        nested: {
-                            path: "wikipedia",
-                            query: {
-                                bool: {
-                                    must: [
-                                        { match: { "wikipedia.sec_name": translation } }
-                                    ]
-                                }
-                            }
-                        }
-                    }],
-                    ...filterFlag && {
-                        filter: filters
                     }
-                }
-            },
-            aggs: {
-                languages: {
-                    terms: { field: "language" }
                 },
-                types: {
-                    terms: { field: "type" }
+                aggs: {
+                    languages: {
+                        terms: { field: "language" }
+                    },
+                    types: {
+                        terms: { field: "type" }
+                    },
+                    licenses: {
+                        terms: { field: "license.short_name" }
+                    },
+                    providers: {
+                        terms: { field: "provider_name" }
+                    }
                 },
-                licenses: {
-                    terms: { field: "license.short_name" }
-                },
-                providers: {
-                    terms: { field: "provider_name" }
-                }
-            },
-            min_score: 5,
-            track_total_hits: true
+                min_score: 5,
+                track_total_hits: true
+            };
+
+            try {
+                // get the search results from elasticsearch
+                const output = await es.search("oer_materials", esQuery);
+                // format the output before sending
+                results = output.hits.hits.map((hit: IElasticsearchHit) =>
+                    materialFormat(hit, wikipedia, wikipedia_limit, getContent, content_extension)
+                );
+                // prepare the metadata used to navigate through the search
+                totalHits = output.hits.total.value;
+                totalPages = Math.ceil(output.hits.total.value / size);
+
+                results.aggregations.providers.buckets.forEach((provider: { key: string }) => {
+                    provider.key = provider.key.toLowerCase();
+                });
+                // store the aggregations
+                aggregations = results.aggregations;
+            } catch (error) {
+                return next(new ErrorHandler(500, "Internal server error"));
+            }
+        }
+
+        // prepare the parameters for the previous query
+        const prevQuery = {
+            ...req.query,
+            ...page && { page: page - 1 }
         };
 
-        try {
-            // get the search results from elasticsearch
-            const results = await es.search("oer_materials", esQuery);
-            // format the output before sending
-            const output = results.hits.hits.map((hit: IElasticsearchHit) =>
-                materialFormat(hit, wikipedia, wikipedia_limit, getContent, content_extension)
-            );
+        // prepare the parameters for the next query
+        const nextQuery = {
+            ...req.query,
+            ...page && { page: page + 1 }
+        };
 
-            // prepare the parameters for the previous query
-            const prevQuery = {
-                ...req.query,
-                ...page && { page: page - 1 }
-            };
+        const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
+        const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
 
-            // prepare the parameters for the next query
-            const nextQuery = {
-                ...req.query,
-                ...page && { page: page + 1 }
-            };
-
-            const BASE_URL = "https://platform.x5gon.org/api/v1/search";
-            // prepare the metadata used to navigate through the search
-            const totalHits = results.hits.total.value;
-            const totalPages = Math.ceil(results.hits.total.value / size);
-            const prevPage = page - 1 > 0 ? `${BASE_URL}?${querystring.stringify(prevQuery)}` : null;
-            const nextPage = totalPages >= page + 1 ? `${BASE_URL}?${querystring.stringify(nextQuery)}` : null;
-            results.aggregations.providers.buckets.forEach((provider: { key: string }) => {
-                provider.key = provider.key.toLowerCase();
-            });
-
-            // output the materials
-            return res.json({
-                query: req.query,
-                rec_materials: output,
-                metadata: {
-                    total_hits: totalHits,
-                    total_pages: totalPages,
-                    prev_page: prevPage,
-                    next_page: nextPage,
-                    aggregations: {
-                        licenses: results.aggregations.licenses.buckets,
-                        languages: results.aggregations.languages.buckets,
-                        providers: results.aggregations.providers.buckets,
-                        types: results.aggregations.types.buckets
+        // output the materials
+        return res.status(200).json({
+            query: req.query,
+            rec_materials: results,
+            metadata: {
+                total_hits: totalHits,
+                total_pages: totalPages,
+                prev_page: prevPage,
+                next_page: nextPage,
+                ...aggregations && { aggregations: {
+                        licenses: aggregations.licenses.buckets,
+                        languages: aggregations.languages.buckets,
+                        providers: aggregations.providers.buckets,
+                        types: aggregations.types.buckets
                     }
                 }
-            });
-        } catch (error) {
-            return next(new ErrorHandler(500, "Internal server error"));
-        }
+            }
+        });
     });
 
     /**

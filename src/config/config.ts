@@ -30,6 +30,9 @@ const production = {
     sessionsecret: process.env.PROD_SESSION_SECRET,
     elasticsearch: {
         node: process.env.PROD_ELASTICSEARCH_NODE
+    },
+    creativecommons: {
+        token: process.env.PROD_CREATIVECOMMONS_TOKEN
     }
 };
 
@@ -40,6 +43,9 @@ const development = {
     sessionsecret: process.env.DEV_SESSION_SECRET,
     elasticsearch: {
         node: process.env.DEV_ELASTICSEARCH_NODE
+    },
+    creativecommons: {
+        token: process.env.DEV_CREATIVECOMMONS_TOKEN
     }
 };
 
@@ -50,6 +56,9 @@ const test = {
     sessionsecret: process.env.TEST_SESSION_SECRET,
     elasticsearch: {
         node: process.env.TEST_ELASTICSEARCH_NODE
+    },
+    creativecommons: {
+        token: process.env.TEST_CREATIVECOMMONS_TOKEN
     }
 };
 

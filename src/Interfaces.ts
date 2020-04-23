@@ -16,6 +16,9 @@ export interface IConfigENV {
     sessionsecret?: string,
     elasticsearch: {
         node: string
+    },
+    creativecommons: {
+        token: string
     }
 }
 
@@ -26,6 +29,9 @@ export interface IConfiguration {
     sessionsecret?: string,
     elasticsearch: {
         node: string
+    },
+    creativecommons: {
+        token: string
     }
 }
 
