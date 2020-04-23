@@ -16,7 +16,6 @@ This approach requires the `dotenv` module (which is installed by running the
 What follows is an example of the `.env` file. To get the right tokens contact
 one of the developers contributing to this project.
 
-
 ```bash
 #######################################
 ### Production variables
@@ -26,6 +25,8 @@ PROD_PORT={production-service-port: integer}
 PROD_SESSION_SECRET={production-session-secret: string}
 PROD_ELASTICSEARCH_NODE={production-elasticsearch-node: address:port}
 
+PROD_CREATIVECOMMONS_TOKEN={cc-token}
+
 #######################################
 ### Development variables
 #######################################
@@ -34,6 +35,8 @@ DEV_PORT={development-service-port: integer}
 DEV_SESSION_SECRET={development-session-secret: string}
 DEV_ELASTICSEARCH_NODE={development-elasticsearch-node: address:port}
 
+DEV_CREATIVECOMMONS_TOKEN={cc-token}
+
 #######################################
 ### Test variables
 #######################################
@@ -41,4 +44,16 @@ DEV_ELASTICSEARCH_NODE={development-elasticsearch-node: address:port}
 TEST_PORT={test-service-port: integer}
 TEST_SESSION_SECRET={test-session-secret: string}
 TEST_ELASTICSEARCH_NODE={test-elasticsearch-node: address:port}
+
+TEST_CREATIVECOMMONS_TOKEN={cc-token}
 ```
+
+## Creative Commons Token
+
+Part of the search, the part for retrieving CC images, is done through the use
+of the Creative Commons Search API:
+https://api.creativecommons.engineering/v1/
+
+Although the API is free for use, registered users can make more
+queries to the API. Follow the instructions on the above link to
+register and get a creative commons token.
