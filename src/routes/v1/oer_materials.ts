@@ -310,6 +310,7 @@ export default (config: IConfiguration) => {
                 results = output.results.map((r) => imageFormat(r));
 
             } catch (error) {
+                console.log(error);
                 return next(new ErrorHandler(500, "Internal server error"));
             }
         } else {
@@ -403,12 +404,13 @@ export default (config: IConfiguration) => {
                 totalHits = output.hits.total.value;
                 totalPages = Math.ceil(output.hits.total.value / size);
 
-                results.aggregations.providers.buckets.forEach((provider: { key: string }) => {
+                output.aggregations.providers.buckets.forEach((provider: { key: string }) => {
                     provider.key = provider.key.toLowerCase();
                 });
                 // store the aggregations
-                aggregations = results.aggregations;
+                aggregations = output.aggregations;
             } catch (error) {
+                console.log(error);
                 return next(new ErrorHandler(500, "Internal server error"));
             }
         }
