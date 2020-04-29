@@ -79,7 +79,7 @@ export default (config: IConfiguration) => {
     const NO_LICENSE_DISCLAIMER = "X5GON recommends the use of the Creative Commons open licenses. During a transitory phase, other licenses, open in spirit, are sometimes used by our partner sites.";
     const DEFAULT_DISCLAIMER = "The usage of the corresponding material is in all cases under the sole responsibility of the user.";
 
-    const BASE_URL = "https://platform.x5gon.org/api/v1/search";
+    const BASE_URL = "https://platform.x5gon.org/api/v2/search";
     // establish connection with elasticsearch
     const es = new Elasticsearch(config.elasticsearch);
 

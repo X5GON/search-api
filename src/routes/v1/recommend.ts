@@ -14,6 +14,8 @@ import {
 import { Router, Request, Response, NextFunction } from "express";
 // validating the query parameters
 import { query } from "express-validator";
+// import bent for making requests
+import * as bent from "bent";
 // creation of the query string to help the user navigate through
 import * as querystring from "querystring";
 // add error handling functionality
@@ -74,9 +76,11 @@ export default (config: IConfiguration) => {
     const DEFAULT_LIMIT = 20;
     const MAX_LIMIT = 100;
     const DEFAULT_PAGE = 1;
-
+    const BASE_URL = "https://platform.x5gon.org/api/v1/recommend/oer_bundles";
     // esablish connection with elasticsearch
     const es = new Elasticsearch(config.elasticsearch);
+
+    const searchRequest = bent("GET", `http://127.0.0.1:${config.port}`, "json", 200);
 
     // TODO: must specify the correct material type
     router.get("/recommend/oer_bundles", [
@@ -142,7 +146,16 @@ export default (config: IConfiguration) => {
             const results = await es.search("oer_materials", materialQuery);
             if (results.hits.total.value === 0 && text) {
                 const queryParams = querystring.stringify(req.query);
-                return res.redirect(`/api/v1/oer_materials?${queryParams}`);
+                const response = await searchRequest(`/api/v1/oer_materials?${queryParams}`);
+                // update the previous and next pages
+                response.metadata.prev_page = response.metadata.prev_page
+                    ? response.metadata.prev_page.replace("search", "recommend/oer_bundles")
+                    : null;
+                response.metadata.next_page = response.metadata.next_page
+                    ? response.metadata.next_page.replace("search", "recommend/oer_bundles")
+                    : null;
+                // return the response
+                return res.json(response);
             }
 
             const viewedMaterials: IElasticsearchHit[] = results.hits.hits;
@@ -377,8 +390,6 @@ export default (config: IConfiguration) => {
                 ...(page && { page: page + 1 })
             };
 
-            const BASE_URL =
-                "https://platform.x5gon.org/api/v1/recommend/oer_bundles";
             // prepare the metadata used to navigate through the search
             const totalHits = results.hits.total.value;
             const totalPages = Math.ceil(results.hits.total.value / size);
