@@ -4,7 +4,7 @@
  * manipuating data from Elastic Search.
  */
 
-import { IConfiguration, IElasticsearchHit, ISearch, IQueryElement } from "../../Interfaces";
+import { IConfiguration, IElasticsearchHit, ISearch, IQueryElement, IQueryImage } from "../../Interfaces";
 
 
 import { Router, Request, Response, NextFunction } from "express";
@@ -117,7 +117,7 @@ export default (config: IConfiguration) => {
         };
     }
 
-    function imageFormat(image: any) {
+    function imageFormat(image: IQueryImage) {
         return {
             image_id: image.id,
             title: image.title,
@@ -155,6 +155,8 @@ export default (config: IConfiguration) => {
             .customSanitizer((value: string) => (value && value.length ? value.toLowerCase().split(",").map((id) => parseInt(id, 10)) : null)),
         query("wikipedia").optional().toBoolean(),
         query("wikipedia_limit").optional().toInt(),
+        query("sort_by").optional().trim()
+            .customSanitizer((value: string) => (value && value.length ? value.toLowerCase() : null)),
         query("limit").optional().toInt(),
         query("page").optional().toInt()
     ], async (req: Request, res: Response, next: NextFunction) => {
@@ -170,6 +172,7 @@ export default (config: IConfiguration) => {
             licenses,
             wikipedia,
             wikipedia_limit,
+            sort_by,
             limit: queryLimit,
             page: queryPage
         } = requestQuery;
@@ -281,14 +284,35 @@ export default (config: IConfiguration) => {
             });
         }
 
+        if (sort_by === "creation_date") {
+            filters.push({
+                exists: {
+                    field: "creation_date"
+                }
+            });
+        }
+
         // check if we need to filter the documents
         const filterFlag = filters.length > 0;
+
+        // ------------------------------------
+        // Sort outpus
+        // ------------------------------------
+
+        const sortBy = [];
+
+        if (sort_by === "creation_date") {
+            sortBy.push({ creation_date: { order: "desc" } });
+        }
+
+        sortBy.push("_score");
 
         // ------------------------------------
         // Translate the user input
         // ------------------------------------
 
         const translation = text;
+        // TODO: add the proper translation when it will be available
 
         // ------------------------------------
         // Check if the request is for images
@@ -307,8 +331,7 @@ export default (config: IConfiguration) => {
                 totalHits = output.result_count;
                 totalPages = output.page_count;
                 // format the image results
-                results = output.results.map((r) => imageFormat(r));
-
+                results = output.results.map((r: IQueryImage) => imageFormat(r));
             } catch (error) {
                 console.log(error);
                 return next(new ErrorHandler(500, "Internal server error"));
@@ -369,12 +392,21 @@ export default (config: IConfiguration) => {
                                     }
                                 }
                             }
+                        }, {
+                            range: {
+                                creation_date: {
+                                    gte: "now-5y/d",
+                                    lte:  "now/d",
+                                    boost: 10.0
+                                }
+                            }
                         }],
                         ...filterFlag && {
                             filter: filters
                         }
                     }
                 },
+                ...sort_by && sort_by.length && { sort: sortBy },
                 aggs: {
                     languages: {
                         terms: { field: "language" }

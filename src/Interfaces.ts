@@ -113,6 +113,7 @@ export interface ISearch {
     provider_ids?: string[],
     wikipedia?: boolean,
     wikipedia_limit?: number,
+    sort_by?: string,
     limit?: number,
     page?: number
 }
@@ -121,5 +122,19 @@ export interface IQueryElement {
     term?: object,
     terms?: object,
     regexp?: object,
-    exists?: object
+    exists?: object,
+    range?: object
+}
+
+export interface IQueryImage {
+    id: number,
+    title: string,
+    source: string,
+    creator: string,
+    creator_url: string,
+    license_url: string,
+    url: string,
+    foreign_landing_url: string,
+    height: number,
+    width: number
 }
