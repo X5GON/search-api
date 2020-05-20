@@ -303,6 +303,8 @@ export default (config: IConfiguration) => {
 
         if (sort_by === "creation_date") {
             sortBy.push({ creation_date: { order: "desc" } });
+        } else if (sort_by === "retrieved_date") {
+            sortBy.push({ retrieved_date: { order: "desc" } });
         }
 
         sortBy.push("_score");
