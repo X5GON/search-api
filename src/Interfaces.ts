@@ -132,6 +132,7 @@ export interface IQueryImage {
     source: string,
     creator: string,
     creator_url: string,
+    license: string,
     license_url: string,
     url: string,
     foreign_landing_url: string,

@@ -88,10 +88,12 @@ export default (config: IConfiguration) => {
 
     // get the images from creative commons search
     async function fetchImages(text: string, limit: number, page: number, licenses: string[]) {
+        // first filter out the licenses
+        const filteredLicenses = licenses ? licenses.filter((l) => l !== 'cc') : licenses;
         // prepare query for CC search
         const queryObject = {
             q: text,
-            ...licenses && { licenses },
+            ...filteredLicenses && { license: filteredLicenses.join(",") },
             page_size: limit,
             page
         };
@@ -103,17 +105,16 @@ export default (config: IConfiguration) => {
     }
 
     // formats the license
-    function formatLicense(license: string) {
+    function formatLicense(license: string, license_url: string) {
         // modify the license attribute when sending to elasticsearch
         const disclaimer = DEFAULT_DISCLAIMER;
-        const regex = /\/licen[sc]es\/([\w\-]+)\//;
-        const shortName = license.match(regex)[1];
+        const shortName = license;
         const typedName = shortName.split("-");
         return {
             short_name: shortName,
             typed_name: typedName,
             disclaimer,
-            url: license
+            url: license_url
         };
     }
 
@@ -124,7 +125,7 @@ export default (config: IConfiguration) => {
             source: image.source,
             creator: image.creator,
             creator_url: image.creator_url,
-            license: formatLicense(image.license_url),
+            license: formatLicense(image.license, image.license_url),
             material_url: image.url,
             website: image.foreign_landing_url,
             height: image.height,
