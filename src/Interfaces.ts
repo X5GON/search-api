@@ -18,7 +18,8 @@ export interface IConfigENV {
         node: string
     },
     creativecommons: {
-        token: string
+        token: string,
+        source: string[]
     }
 }
 
@@ -31,7 +32,8 @@ export interface IConfiguration {
         node: string
     },
     creativecommons: {
-        token: string
+        token: string,
+        source: string[]
     }
 }
 
@@ -93,6 +95,8 @@ export interface IPostgreSQLParams {
     port: number;
     max: number;
     idleTimeoutMillis: number;
+    schema: string;
+    version: string;
 }
 
 export type IPostgreSQLBatchCallbackFunc = (error: Error, rows: any[], callback: IGenericCallbackFunc) => void;

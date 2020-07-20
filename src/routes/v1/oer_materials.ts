@@ -94,6 +94,7 @@ export default (config: IConfiguration) => {
         const queryObject = {
             q: text,
             ...filteredLicenses && { license: filteredLicenses.join(",") },
+            source: config.creativecommons.source.join(","),
             page_size: limit,
             page
         };

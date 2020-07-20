@@ -7,7 +7,7 @@
     "build": "./node_modules/typescript/bin/tsc",
     "start": "node dist/search.js",
     "development": "./node_modules/nodemon/bin/nodemon.js --config ./nodemon.json",
-    "load:es": "node src/load/create-elasticsearch-index.js",
+    "load:es": "node ./load/create-elasticsearch-index.js",
     "test": "echo \"Error: no test specified\" && exit 0",
     "format": "./node_modules/.bin/tsfmt -r",
     "lint": "./node_modules/.bin/tslint --project .",
