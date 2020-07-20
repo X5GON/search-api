@@ -332,8 +332,8 @@ export default (config: IConfiguration) => {
             try {
                 const output = await fetchImages(text, limit, page, licenses);
                 // get the total number of results
-                totalHits = output.result_count;
-                totalPages = output.page_count;
+                totalPages = output.page_count > 100 ? 100 : output.page_count;
+                totalHits =  totalPages * 20;// output.result_count;
                 // format the image results
                 results = output.results.map((r: IQueryImage) => imageFormat(r));
             } catch (error) {
