@@ -1,8 +1,7 @@
 # X5GON Search API
 
-[![Build Status][build]][build-status]
-![Node.js CI][github-action]
 ![Node][programming-language]
+![Node.js CI][github-action]
 [![Linux Build][linux-build]][linux-build-status]
 [![OSX Build][osx-build]][osx-build-status]
 [![License][license]][license-link]
@@ -74,11 +73,8 @@ their [documentation](https://pm2.keymetrics.io/docs/usage/quick-start/).
 
 
 
-
-[build]: https://travis-ci.com/X5GON/search-api.svg?branch=master
-[build-status]: https://travis-ci.com/X5GON/search-api
-[github-action]: https://github.com/X5GON/search-api/workflows/Node.js%20CI/badge.svg
 [programming-language]: https://img.shields.io/badge/node-%3E%3D%2010.0.0-green.svg
+[github-action]: https://github.com/X5GON/search-api/workflows/Node.js%20CI/badge.svg
 [linux-build]: https://img.shields.io/travis/X5GON/search-api/master.svg?label=linux
 [linux-build-status]: https://travis-ci.org/X5GON/search-api
 [osx-build]: https://img.shields.io/travis/X5GON/search-api/master.svg?label=mac
