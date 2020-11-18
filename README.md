@@ -12,7 +12,7 @@ service and allows to search through the documents using different criteria.
 
 ## Prerequisites
 - A running Elasticsearch service (one can download and install it from [here][elasticsearch-download] 
-  or use a [docker image][elasticsearch-docker]
+  or use a [docker image][elasticsearch-docker])
 - NodeJS version 10 or greater
 
   To test that your nodejs version is correct, run `node --version` in the command line.
