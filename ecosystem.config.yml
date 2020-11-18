@@ -1,5 +1,5 @@
 apps:
-  - script: "dist/index.js"
+  - script: "dist/search.js"
     name: "X5search"
     cwd: "."
     instances: 4,
