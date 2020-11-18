@@ -67,8 +67,8 @@ This will start the service in the terminal.
 
 ## Running the Search API using PM2
 
-one can also run the search API using [PM2](https://pm2.keymetrics.io/). This will run the service
-in the background, will automatically restart on if the service crashes and is fully configurable 
+One can also run the search API using [PM2](https://pm2.keymetrics.io/). This will run the service
+in the background, will automatically restart if the service crashes and is fully configurable 
 through the [./ecosystem.config.yml](./ecosystem.config.yml) file.
 
 To install PM2 one must run
