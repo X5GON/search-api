@@ -11,10 +11,12 @@ service and allows to search through the documents using different criteria.
 
 
 ## Prerequisites
-- A running Elasticsearch service (one can download and install it from [here][elasticsearch-download] or use a [docker image][elasticsearch-docker]
+- A running Elasticsearch service (one can download and install it from [here][elasticsearch-download] 
+  or use a [docker image][elasticsearch-docker]
 - NodeJS version 10 or greater
 
   To test that your nodejs version is correct, run `node --version` in the command line.
+
 
 ## Installation
 
@@ -35,7 +37,20 @@ service and allows to search through the documents using different criteria.
     ```
     
   The built components will be available in the `./dist` folder.
-    
+
+
+## Populating the Elasticsearch Index
+
+Before running the service one must have a populated elasticsearch index. Assuming that the PostgreSQL 
+database is populated with the material documents one can run the loading script:
+
+```bash
+cd load && node create-elasticsearch-index
+```
+
+The script contains the schema of the elasticsearch index and the logic on how to bundle the material
+metadata into the index.
+
 
 ## Running the Search API manually
 
