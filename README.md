@@ -60,7 +60,7 @@ To manually start the Search API service one must simply run the following comma
 # running in development environment
 npm start
 # running in production environment
-NODE_ENV=production npm start
+cd ./dist && NODE_ENV=production node search.js
 ```
 
 This will start the service in the terminal.
