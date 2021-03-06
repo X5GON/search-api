@@ -169,7 +169,10 @@ export default class PostgreSQL {
         }
         // start processing records in postgres
         async.whilst(
-            () => batchSize === lastBatch,
+            (cb) => {
+                cb(null, batchSize ===lastBatch)
+                return batchSize === lastBatch
+            },
             _batchFunction,
             _batchFinalFunction
         );
