@@ -163,13 +163,16 @@ export default class PostgreSQL {
         // what to do when all of the batches were processed
         function _batchFinalFunction(error: Error) {
             cursor.close(() => {
-                cursor.release();
+                client.release();
                 return callback(error);
             });
         }
         // start processing records in postgres
         async.whilst(
-            () => batchSize === lastBatch,
+            (cb) => {
+                cb(null, batchSize ===lastBatch)
+                return batchSize === lastBatch
+            },
             _batchFunction,
             _batchFinalFunction
         );

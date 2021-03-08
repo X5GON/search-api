@@ -4,7 +4,7 @@
 const async = require("async");
 // eslint-disable-next-line linebreak-style
 const { default: PostgreSQL } = require("../dist/library/postgresQL");
-const { default: ElasticSearch } = require("../src/library/elasticsearch");
+const { default: ElasticSearch } = require("../dist/library/elasticsearch");
 
 // configurations
 const { default: config } = require("../dist/config/config");
